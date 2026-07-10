@@ -63,6 +63,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     current = reporter.metrics_for_day(target_day)
     previous = reporter.metrics_for_day(previous_day)
     estimated_loans, estimate_note = estimate_loans(reporter, settings, target_day, current, today)
+    estimated_loans = max(current.loans, round(estimated_loans))
     save_daily_snapshot(target_day, today, current)
 
     current_cost = convert_cost(current.cost_inr, rate)
@@ -75,7 +76,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     text = "\n".join(
         [
-            f"📣 {settings.report_brand} 日报 印度日期：{target_day}",
+            f"📣 {settings.report_brand} 日报 推送日期：{today} 统计日期：{target_day}（昨日）",
             "",
             f"【Google】💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
             f"昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈  昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",

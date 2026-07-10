@@ -36,7 +36,7 @@ jobs:
       GOOGLE_ADS_CUSTOMER_IDS: ${{ secrets.GOOGLE_ADS_CUSTOMER_IDS }}
       GOOGLE_ADS_CONVERSION_METRIC: conversions
       REGISTER_CONVERSION_METRIC: all_conversions
-      LOAN_CONVERSION_METRIC: conversions
+      LOAN_CONVERSION_METRIC: all_conversions
       REGISTER_CONVERSION_NAME: in.pocketmitra (Android) register_success
       LOAN_CONVERSION_NAME: pocketmitra-b2e34 - in.pocketmitra (Android) first_loan_success
       DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
