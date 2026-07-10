@@ -135,6 +135,9 @@ def main() -> None:
     hourly.add_argument("--dry-run", action="store_true")
     conversions = subparsers.add_parser("conversions")
     conversions.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
+    lag = subparsers.add_parser("loan-lag")
+    lag.add_argument("--start", required=True, help="Start date in YYYY-MM-DD")
+    lag.add_argument("--end", required=True, help="End date in YYYY-MM-DD")
     args = parser.parse_args()
     if args.command == "daily":
         daily_report(dry_run=args.dry_run, report_date=args.date)
@@ -148,6 +151,17 @@ def main() -> None:
         print(f"Conversion breakdown for {day}:")
         for name, selected, all_value in reporter.conversion_breakdown(day):
             print(f"{selected:,.2f}\tall={all_value:,.2f}\t{name}")
+    elif args.command == "loan-lag":
+        settings = load_settings()
+        reporter = GoogleAdsReporter(settings)
+        start = datetime.fromisoformat(args.start).date()
+        end = datetime.fromisoformat(args.end).date()
+        rows = reporter.conversion_lag_breakdown(settings.loan_conversion_name, settings.loan_conversion_metric, start, end)
+        total = sum(rows.values())
+        print(f"Loan lag breakdown for {start} to {end}, total={total:,.2f}:")
+        for bucket, value in sorted(rows.items()):
+            pct = value / total if total else 0
+            print(f"{bucket}\t{value:,.2f}\t{pct:.2%}")
 
 
 if __name__ == "__main__":

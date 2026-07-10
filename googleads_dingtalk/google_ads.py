@@ -122,3 +122,20 @@ class GoogleAdsReporter:
             key=lambda item: item[1],
             reverse=True,
         )
+
+    def conversion_lag_breakdown(self, action_name: str, metric_name: str, start: date, end: date) -> dict[str, float]:
+        metric = f"metrics.{metric_name}"
+        rows: dict[str, float] = {}
+        escaped_name = action_name.replace("\\", "\\\\").replace("'", "\\'")
+        for customer_id in self.settings.customer_ids:
+            query = f"""
+                SELECT {metric}, segments.conversion_action_name, segments.conversion_lag_bucket
+                FROM customer
+                WHERE segments.date BETWEEN '{start}' AND '{end}'
+                  AND segments.conversion_action_name = '{escaped_name}'
+            """
+            for row in self._search(customer_id, query):
+                bucket = row.segments.conversion_lag_bucket.name
+                value = row.metrics.conversions if metric_name == "conversions" else row.metrics.all_conversions
+                rows[bucket] = rows.get(bucket, 0.0) + float(value)
+        return rows

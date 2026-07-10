@@ -38,6 +38,10 @@ def estimate_loans(
     observed_metrics: Metrics,
     observed_at: date,
 ) -> tuple[float, str]:
+    lag_curve_estimate = _estimate_from_conversion_lag_curve(reporter, settings, report_day, observed_metrics, observed_at)
+    if lag_curve_estimate is not None:
+        return lag_curve_estimate
+
     factor_estimate = _estimate_from_snapshot_factor(report_day, observed_metrics.loans, observed_at)
     if factor_estimate is not None:
         return factor_estimate, "基于历史 D+1 回传完成率"
@@ -54,6 +58,70 @@ def estimate_loans(
     loan_rate = mature_loans / mature_registers
     estimated = max(observed_metrics.loans, observed_metrics.registers * loan_rate)
     return estimated, f"基于近{settings.loan_estimate_lookback_days}天成熟数据放款/注册率 {loan_rate:.2%}"
+
+
+def _estimate_from_conversion_lag_curve(
+    reporter: GoogleAdsReporter,
+    settings: Settings,
+    report_day: date,
+    observed_metrics: Metrics,
+    observed_at: date,
+) -> tuple[float, str] | None:
+    if observed_metrics.loans <= 0:
+        return None
+    end = report_day - timedelta(days=settings.loan_estimate_exclude_recent_days)
+    start = end - timedelta(days=settings.loan_estimate_lookback_days - 1)
+    if start > end:
+        return None
+    lag_rows = reporter.conversion_lag_breakdown(
+        settings.loan_conversion_name,
+        settings.loan_conversion_metric,
+        start,
+        end,
+    )
+    total_mature_loans = sum(lag_rows.values())
+    if total_mature_loans <= 0:
+        return None
+    age_days = max((observed_at - report_day).days, 1)
+    completed_loans = sum(
+        value
+        for bucket, value in lag_rows.items()
+        if _lag_bucket_upper_day(bucket) <= age_days
+    )
+    completion_rate = completed_loans / total_mature_loans
+    if completion_rate <= 0:
+        return None
+    estimated = observed_metrics.loans / completion_rate
+    note = (
+        f"基于近{settings.loan_estimate_lookback_days}天成熟 cohort "
+        f"D+{age_days} 回传完成率 {completion_rate:.2%}"
+    )
+    return max(observed_metrics.loans, estimated), note
+
+
+def _lag_bucket_upper_day(bucket: str) -> int:
+    upper_days = {
+        "LESS_THAN_ONE_DAY": 1,
+        "ONE_TO_TWO_DAYS": 2,
+        "TWO_TO_THREE_DAYS": 3,
+        "THREE_TO_FOUR_DAYS": 4,
+        "FOUR_TO_FIVE_DAYS": 5,
+        "FIVE_TO_SIX_DAYS": 6,
+        "SIX_TO_SEVEN_DAYS": 7,
+        "SEVEN_TO_EIGHT_DAYS": 8,
+        "EIGHT_TO_NINE_DAYS": 9,
+        "NINE_TO_TEN_DAYS": 10,
+        "TEN_TO_ELEVEN_DAYS": 11,
+        "ELEVEN_TO_TWELVE_DAYS": 12,
+        "TWELVE_TO_THIRTEEN_DAYS": 13,
+        "THIRTEEN_TO_FOURTEEN_DAYS": 14,
+        "FOURTEEN_TO_TWENTY_ONE_DAYS": 21,
+        "TWENTY_ONE_TO_THIRTY_DAYS": 30,
+        "THIRTY_TO_FORTY_FIVE_DAYS": 45,
+        "FORTY_FIVE_TO_SIXTY_DAYS": 60,
+        "SIXTY_TO_NINETY_DAYS": 90,
+    }
+    return upper_days.get(bucket, 999)
 
 
 def _estimate_from_snapshot_factor(report_day: date, observed_loans: float, observed_at: date) -> float | None:
