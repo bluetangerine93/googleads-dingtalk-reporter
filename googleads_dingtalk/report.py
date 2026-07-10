@@ -40,6 +40,12 @@ def convert_cost(cost_inr: float, rate: Decimal) -> Decimal:
     return Decimal(str(cost_inr)) * rate
 
 
+def usd_to_inr(rate: Decimal) -> Decimal:
+    if rate <= 0:
+        return Decimal("0")
+    return (Decimal("1") / rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def signed_pct(current: float, previous: float) -> str:
     return f"({pct_change(current, previous)})"
 
@@ -64,14 +70,17 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous = reporter.metrics_for_day(previous_day)
     estimated_loans, estimate_note = estimate_loans(reporter, settings, target_day, current, today)
     estimated_loans = max(current.loans, round(estimated_loans))
+    previous_estimated_loans, _ = estimate_loans(reporter, settings, previous_day, previous, today)
+    previous_estimated_loans = max(previous.loans, round(previous_estimated_loans))
     save_daily_snapshot(target_day, today, current)
 
     current_cost = convert_cost(current.cost_inr, rate)
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_reg_cpa = cpa(current_cost, current.registers)
     previous_reg_cpa = cpa(previous_cost, previous.registers)
+    actual_loan_cpa = cpa(current_cost, current.loans)
     estimated_loan_cpa = cpa(current_cost, estimated_loans)
-    previous_loan_cpa = cpa(previous_cost, previous.loans)
+    previous_estimated_loan_cpa = cpa(previous_cost, previous_estimated_loans)
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     text = "\n".join(
@@ -81,11 +90,11 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             f"【Google】💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
             f"昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈  昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
             "",
-            f"💵 放款数：{number(current.loans)} 已回传 / {number(estimated_loans)} 预估",
-            f"放款成本：{money(estimated_loan_cpa)} 预估 {signed_pct(float(estimated_loan_cpa), float(previous_loan_cpa))}",
+            f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
+            f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
             "",
             f"📝 放款预估：{estimate_note}",
-            f"汇率：1 INR = {rate} USD",
+            f"汇率：1 USD = {usd_to_inr(rate)} INR",
         ]
     )
     send_markdown(settings, title, text, dry_run=dry_run)
