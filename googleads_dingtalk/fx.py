@@ -27,14 +27,21 @@ def get_monthly_rate(settings: Settings, today: date) -> Decimal:
     if settings.account_currency != "INR" or settings.target_currency != "USD":
         raise ValueError("Only INR to USD is configured in this reporter")
     month_key = today.strftime("%Y-%m")
+    if settings.inr_usd_rate:
+        rate = Decimal(settings.inr_usd_rate)
+        cache = _read_cache()
+        cache[month_key] = {
+            "from": settings.account_currency,
+            "to": settings.target_currency,
+            "rate": str(rate),
+            "source": "env",
+        }
+        _write_cache(cache)
+        return rate
     cache = _read_cache()
     if month_key in cache:
         return Decimal(str(cache[month_key]["rate"]))
-    if settings.inr_usd_rate:
-        rate = Decimal(settings.inr_usd_rate)
-        source = "env"
-    else:
-        rate, source = _fetch_inr_usd_rate()
+    rate, source = _fetch_inr_usd_rate()
     cache[month_key] = {
         "from": settings.account_currency,
         "to": settings.target_currency,
