@@ -1,0 +1,106 @@
+name: Google Ads DingTalk Reports
+
+on:
+  schedule:
+    # 10:10 Asia/Kolkata.
+    - cron: "40 4 * * *"
+    # 12:00, 15:00, 18:00, 21:00 Asia/Kolkata.
+    - cron: "30 6,9,12,15 * * *"
+  workflow_dispatch:
+    inputs:
+      report_type:
+        description: "Report type"
+        required: true
+        default: "hourly"
+        type: choice
+        options:
+          - hourly
+          - daily
+      dry_run:
+        description: "Print DingTalk payload without sending"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+      GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      GOOGLE_ADS_CUSTOMER_IDS: ${{ secrets.GOOGLE_ADS_CUSTOMER_IDS }}
+      GOOGLE_ADS_CONVERSION_METRIC: conversions
+      REGISTER_CONVERSION_METRIC: all_conversions
+      LOAN_CONVERSION_METRIC: conversions
+      REGISTER_CONVERSION_NAME: in.pocketmitra (Android) register_success
+      LOAN_CONVERSION_NAME: pocketmitra-b2e34 - in.pocketmitra (Android) first_loan_success
+      DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+      DINGTALK_KEYWORD: 推送
+      DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
+      REPORT_TIMEZONE: Asia/Kolkata
+      ACCOUNT_CURRENCY: INR
+      TARGET_CURRENCY: USD
+      INR_USD_RATE: ${{ secrets.INR_USD_RATE }}
+      REPORT_BRAND: PocketMitra
+      LOAN_ESTIMATE_LOOKBACK_DAYS: 28
+      LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS: 7
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set cache keys
+        id: cache-keys
+        run: |
+          echo "fx_month=$(TZ=Asia/Kolkata date +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore monthly FX cache
+        uses: actions/cache@v4
+        with:
+          path: data/fx_rates.json
+          key: googleads-fx-${{ steps.cache-keys.outputs.fx_month }}
+
+      - name: Restore report snapshots
+        uses: actions/cache@v4
+        with:
+          path: data/daily_snapshots.json
+          key: googleads-snapshots-${{ github.run_id }}
+          restore-keys: |
+            googleads-snapshots-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Choose scheduled report
+        id: choose-report
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            report_type="${{ inputs.report_type }}"
+            dry_run="${{ inputs.dry_run }}"
+          elif [ "${{ github.event.schedule }}" = "40 4 * * *" ]; then
+            report_type="daily"
+            dry_run="false"
+          else
+            report_type="hourly"
+            dry_run="false"
+          fi
+
+          args="$report_type"
+          if [ "$dry_run" = "true" ]; then
+            args="$args --dry-run"
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+
+      - name: Run report
+        run: python -m googleads_dingtalk ${{ steps.choose-report.outputs.args }}

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.jasmine.googleads.hourly</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/jasmine/Documents/谷歌</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/jasmine/Documents/谷歌/scripts/run_report.sh</string>
+    <string>hourly</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>14</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>StandardOutPath</key>
+  <string>/Users/jasmine/Documents/谷歌/logs/googleads-hourly.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jasmine/Documents/谷歌/logs/googleads-hourly.err</string>
+</dict>
+</plist>
