@@ -10,6 +10,7 @@ from .dingtalk import send_markdown
 from .estimator import estimate_loans, save_daily_snapshot
 from .fx import get_monthly_rate
 from .google_ads import GoogleAdsReporter, Metrics
+from .policy_monitor import run_policy_monitor
 
 
 def money(value: float | Decimal) -> str:
@@ -142,6 +143,8 @@ def main() -> None:
     daily.add_argument("--dry-run", action="store_true")
     hourly = subparsers.add_parser("hourly")
     hourly.add_argument("--dry-run", action="store_true")
+    policy = subparsers.add_parser("policy")
+    policy.add_argument("--dry-run", action="store_true")
     conversions = subparsers.add_parser("conversions")
     conversions.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
     lag = subparsers.add_parser("loan-lag")
@@ -152,6 +155,8 @@ def main() -> None:
         daily_report(dry_run=args.dry_run, report_date=args.date)
     elif args.command == "hourly":
         hourly_report(dry_run=args.dry_run)
+    elif args.command == "policy":
+        run_policy_monitor(dry_run=args.dry_run)
     elif args.command == "conversions":
         settings = load_settings()
         tz = ZoneInfo(settings.report_timezone)

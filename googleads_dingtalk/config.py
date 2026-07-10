@@ -46,6 +46,9 @@ class Settings:
     dingtalk_webhook: str
     dingtalk_keyword: str
     dingtalk_secret: str
+    policy_dingtalk_webhook: str
+    policy_dingtalk_keyword: str
+    policy_dingtalk_secret: str
     report_timezone: str
     account_currency: str
     target_currency: str
@@ -88,6 +91,9 @@ def load_settings() -> Settings:
         dingtalk_webhook=env("DINGTALK_WEBHOOK"),
         dingtalk_keyword=env("DINGTALK_KEYWORD", "推送"),
         dingtalk_secret=env("DINGTALK_SECRET"),
+        policy_dingtalk_webhook=env("POLICY_DINGTALK_WEBHOOK", env("DINGTALK_WEBHOOK")),
+        policy_dingtalk_keyword=env("POLICY_DINGTALK_KEYWORD", "拒审"),
+        policy_dingtalk_secret=env("POLICY_DINGTALK_SECRET"),
         report_timezone=env("REPORT_TIMEZONE", "Asia/Kolkata"),
         account_currency=env("ACCOUNT_CURRENCY", "INR"),
         target_currency=env("TARGET_CURRENCY", "USD"),

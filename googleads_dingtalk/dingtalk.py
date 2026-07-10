@@ -21,8 +21,19 @@ def _signed_webhook(webhook: str, secret: str) -> str:
 
 
 def send_markdown(settings: Settings, title: str, text: str, dry_run: bool = False) -> None:
-    if settings.dingtalk_keyword and settings.dingtalk_keyword not in title and settings.dingtalk_keyword not in text:
-        text = f"{settings.dingtalk_keyword}\n\n{text}"
+    send_markdown_to(
+        settings.dingtalk_webhook,
+        settings.dingtalk_secret,
+        settings.dingtalk_keyword,
+        title,
+        text,
+        dry_run=dry_run,
+    )
+
+
+def send_markdown_to(webhook: str, secret: str, keyword: str, title: str, text: str, dry_run: bool = False) -> None:
+    if keyword and keyword not in title and keyword not in text:
+        text = f"{keyword}\n\n{text}"
     payload = {
         "msgtype": "markdown",
         "markdown": {
@@ -33,7 +44,7 @@ def send_markdown(settings: Settings, title: str, text: str, dry_run: bool = Fal
     if dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
-    webhook = _signed_webhook(settings.dingtalk_webhook, settings.dingtalk_secret) if settings.dingtalk_secret else settings.dingtalk_webhook
+    webhook = _signed_webhook(webhook, secret) if secret else webhook
     request = urllib.request.Request(
         webhook,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),

@@ -68,6 +68,8 @@ GOOGLE_ADS_REFRESH_TOKEN
 GOOGLE_ADS_LOGIN_CUSTOMER_ID
 GOOGLE_ADS_CUSTOMER_IDS
 DINGTALK_WEBHOOK
+POLICY_DINGTALK_WEBHOOK
+POLICY_DINGTALK_SECRET
 DINGTALK_SECRET
 INR_USD_RATE
 ```
@@ -78,5 +80,6 @@ Scheduled times are written in UTC:
 
 - Daily: `04:40 UTC`, equal to `10:10 Asia/Kolkata`.
 - Hourly: `06:30`, `09:30`, `12:30`, `15:30 UTC`, equal to `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`.
+- Policy monitor: every 30 minutes.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
