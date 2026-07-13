@@ -4,7 +4,7 @@ This project sends Google Ads account reports to a DingTalk robot.
 
 ## Reports
 
-- Daily report: runs at 10:10 Asia/Kolkata, which is 12:40 on this Mac in Asia/Shanghai.
+- Daily report: runs at 10:00 Asia/Shanghai, which is 07:30 Asia/Kolkata.
 - Hourly reports: run at 12:00, 15:00, 18:00, and 21:00 Asia/Kolkata, which are 14:30, 17:30, 20:30, and 23:30 Asia/Shanghai.
 - Costs are read in INR and converted to USD with one cached monthly rate.
 - Daily loan count uses the current returned loan conversion count plus an estimate. Once the script has accumulated enough daily snapshots, it uses historical D+1 completion factors. Before that, it falls back to the mature historical loan/register rate.
@@ -79,8 +79,45 @@ For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left
 
 Scheduled times are written in UTC:
 
-- Daily: `04:40 UTC`, equal to `10:10 Asia/Kolkata`.
+- Daily: `02:00 UTC`, equal to `10:00 Asia/Shanghai`.
 - Hourly: `06:30`, `09:30`, `12:30`, `15:30 UTC`, equal to `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`.
 - Policy monitor: every 30 minutes at `:05` and `:35` UTC, offset from the report jobs.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
+
+## Optional external cron trigger
+
+If GitHub scheduled workflows do not fire reliably, use an external scheduler such as cron-job.org to call GitHub's `repository_dispatch` API.
+
+Endpoint:
+
+```text
+POST https://api.github.com/repos/bluetangerine93/googleads-dingtalk-reporter/dispatches
+```
+
+Required headers:
+
+```text
+Accept: application/vnd.github+json
+Authorization: Bearer YOUR_GITHUB_TOKEN
+X-GitHub-Api-Version: 2022-11-28
+Content-Type: application/json
+```
+
+Hourly report body:
+
+```json
+{"event_type":"googleads_report","client_payload":{"report_type":"hourly","dry_run":"false"}}
+```
+
+Daily report body:
+
+```json
+{"event_type":"googleads_report","client_payload":{"report_type":"daily","dry_run":"false"}}
+```
+
+Policy monitor body:
+
+```json
+{"event_type":"googleads_policy_monitor","client_payload":{"dry_run":"false"}}
+```

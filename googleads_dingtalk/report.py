@@ -76,6 +76,56 @@ def trend_icon(current: float | Decimal, previous: float | Decimal, lower_is_bet
     return "✅" if improved else "⚠️"
 
 
+def google_daily_lines(
+    current: Metrics,
+    previous: Metrics,
+    current_cost: Decimal,
+    previous_cost: Decimal,
+    current_reg_cpa: Decimal,
+    previous_reg_cpa: Decimal,
+    actual_loan_cpa: Decimal,
+    estimated_loans: int,
+    previous_estimated_loans: int,
+    estimated_loan_cpa: Decimal,
+    previous_estimated_loan_cpa: Decimal,
+    estimate_note: str,
+) -> list[str]:
+    return [
+        "【Google】",
+        "",
+        "🔹 账户合计",
+        f"💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
+        f"📝 昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}",
+        f"📈 昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
+        "",
+        f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
+        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}",
+        f"📊 预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
+        "",
+        f"📝 放款预估：{estimate_note}",
+    ]
+
+
+def google_hourly_lines(
+    current: Metrics,
+    previous: Metrics,
+    current_cost: Decimal,
+    previous_cost: Decimal,
+    current_cpa: Decimal,
+    previous_cpa: Decimal,
+) -> list[str]:
+    return [
+        "【Google】",
+        "",
+        "🔹 账户合计",
+        f"💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
+        f"📝 今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}",
+        f"📈 今日 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
+        "",
+        f"昨日参考：花费 {money(previous_cost)} / 注册 {number(previous.registers)} / CPA {money(previous_cpa)}",
+    ]
+
+
 def fb_daily_lines(
     current_reports: list[FacebookAccountReport],
     previous_reports: list[FacebookAccountReport],
@@ -84,15 +134,15 @@ def fb_daily_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】📊 昨日数据", ""]
-    current_total = total_reports(current_reports)
-    previous_total = total_reports(previous_reports)
-    lines.extend(_fb_daily_block("两账户合计", current_total, previous_total, rate))
-    lines.append("")
+    lines = ["", "【Facebook】", ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
         lines.append("")
+    current_total = total_reports(current_reports)
+    previous_total = total_reports(previous_reports)
+    lines.extend(_fb_daily_block("两账户合计", current_total, previous_total, rate))
+    lines.append("")
     return lines
 
 
@@ -103,8 +153,10 @@ def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetr
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
         f"🔹 {title}",
-        f"💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} / {inr_money(current.spend_inr)}",
-        f"🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}  💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
+        f"🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
+        f"💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"参考 INR：{inr_money(current.spend_inr)}",
     ]
 
 
@@ -116,7 +168,7 @@ def fb_hourly_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】⏱ 实时数据", ""]
+    lines = ["", "【Facebook】", ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_hourly_block(report.name, report.metrics, previous.metrics, rate))
@@ -134,8 +186,10 @@ def _fb_hourly_block(title: str, current: FacebookMetrics, previous: FacebookMet
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
         f"🔹 {title}",
-        f"💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}  🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
+        f"💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
+        f"🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
         f"💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"昨日参考：花费 {money(previous_spend_usd)} / 购物 {number(previous.purchases)} / 成本 {money(previous_cpp_usd)}",
     ]
 
 
@@ -170,16 +224,26 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     lines = [
-        f"📣 {settings.report_brand} 日报 推送日期：{today} 统计日期：{target_day}（昨日）",
+        f"📣 {settings.report_brand} 日报",
+        f"推送日期：{today}  统计日期：{target_day}（昨日）",
         "",
-        f"【Google】💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
-        f"昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈  昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
-        "",
-        f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
-        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
-        "",
-        f"📝 放款预估：{estimate_note}",
     ]
+    lines.extend(
+        google_daily_lines(
+            current,
+            previous,
+            current_cost,
+            previous_cost,
+            current_reg_cpa,
+            previous_reg_cpa,
+            actual_loan_cpa,
+            estimated_loans,
+            previous_estimated_loans,
+            estimated_loan_cpa,
+            previous_estimated_loan_cpa,
+            estimate_note,
+        )
+    )
     lines.extend(fb_daily_lines(fb_current, fb_previous, rate))
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     text = "\n".join(lines)
@@ -208,16 +272,11 @@ def hourly_report(dry_run: bool = False) -> None:
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
     lines = [
-        f"📣 {settings.report_brand} 实时数据 印度时间：{now:%H:%M} 统计窗口：",
-        window_label(hour),
+        f"📣 {settings.report_brand} 实时数据",
+        f"印度时间：{now:%H:%M}  统计窗口：{window_label(hour)}",
         "",
-        f"【Google】💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝",
-        f"今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 今日 CPA：{money(current_cpa)}",
-        signed_pct(float(current_cpa), float(previous_cpa)),
-        "",
-        f"💰 昨日花费：{money(previous_cost)} 📝 昨日注册：{number(previous.registers)} 📈",
-        f"昨日 CPA：{money(previous_cpa)}",
     ]
+    lines.extend(google_hourly_lines(current, previous, current_cost, previous_cost, current_cpa, previous_cpa))
     lines.extend(fb_hourly_lines(fb_current, fb_previous, rate))
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)

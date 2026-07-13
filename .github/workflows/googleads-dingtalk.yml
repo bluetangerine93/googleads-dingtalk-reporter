@@ -2,10 +2,13 @@ name: Google & Facebook DingTalk Reports
 
 on:
   schedule:
-    # 10:10 Asia/Kolkata.
-    - cron: "40 4 * * *"
+    # 10:00 Asia/Shanghai, 07:30 Asia/Kolkata.
+    - cron: "0 2 * * *"
     # 12:00, 15:00, 18:00, 21:00 Asia/Kolkata.
     - cron: "30 6,9,12,15 * * *"
+  repository_dispatch:
+    types:
+      - googleads_report
   workflow_dispatch:
     inputs:
       report_type:
@@ -92,7 +95,16 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             report_type="${{ inputs.report_type }}"
             dry_run="${{ inputs.dry_run }}"
-          elif [ "${{ github.event.schedule }}" = "40 4 * * *" ]; then
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            report_type="${{ github.event.client_payload.report_type }}"
+            dry_run="${{ github.event.client_payload.dry_run }}"
+            if [ -z "$report_type" ]; then
+              report_type="hourly"
+            fi
+            if [ -z "$dry_run" ]; then
+              dry_run="false"
+            fi
+          elif [ "${{ github.event.schedule }}" = "0 2 * * *" ]; then
             report_type="daily"
             dry_run="false"
           else
