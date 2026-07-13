@@ -1,4 +1,4 @@
-name: Google Ads DingTalk Reports
+name: Google & Facebook DingTalk Reports
 
 on:
   schedule:
