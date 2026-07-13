@@ -56,7 +56,7 @@ scripts/run_report.sh hourly
 
 ## GitHub Actions
 
-The workflow in `.github/workflows/googleads-dingtalk.yml` can run the same reports in GitHub Actions, so the Mac does not need to stay online.
+The report workflow in `.github/workflows/googleads-dingtalk.yml` and the policy monitor workflow in `.github/workflows/googleads-policy-monitor.yml` run in GitHub Actions, so the Mac does not need to stay online.
 
 Add these repository secrets in GitHub:
 
@@ -80,6 +80,6 @@ Scheduled times are written in UTC:
 
 - Daily: `04:40 UTC`, equal to `10:10 Asia/Kolkata`.
 - Hourly: `06:30`, `09:30`, `12:30`, `15:30 UTC`, equal to `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`.
-- Policy monitor: every 30 minutes.
+- Policy monitor: every 30 minutes at `:05` and `:35` UTC, offset from the report jobs.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.

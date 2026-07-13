@@ -6,8 +6,6 @@ on:
     - cron: "40 4 * * *"
     # 12:00, 15:00, 18:00, 21:00 Asia/Kolkata.
     - cron: "30 6,9,12,15 * * *"
-    # Policy disapproval monitor, every 30 minutes.
-    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       report_type:
@@ -18,7 +16,6 @@ on:
         options:
           - hourly
           - daily
-          - policy
       dry_run:
         description: "Print DingTalk payload without sending"
         required: true
@@ -45,9 +42,6 @@ jobs:
       DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
       DINGTALK_KEYWORD: 推送
       DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
-      POLICY_DINGTALK_WEBHOOK: ${{ secrets.POLICY_DINGTALK_WEBHOOK }}
-      POLICY_DINGTALK_KEYWORD: 拒审
-      POLICY_DINGTALK_SECRET: ${{ secrets.POLICY_DINGTALK_SECRET }}
       REPORT_TIMEZONE: Asia/Kolkata
       ACCOUNT_CURRENCY: INR
       TARGET_CURRENCY: USD
@@ -79,14 +73,6 @@ jobs:
           restore-keys: |
             googleads-snapshots-
 
-      - name: Restore policy monitor state
-        uses: actions/cache@v4
-        with:
-          path: data/policy_alert_state.json
-          key: googleads-policy-state-${{ github.run_id }}
-          restore-keys: |
-            googleads-policy-state-
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -105,11 +91,8 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "40 4 * * *" ]; then
             report_type="daily"
             dry_run="false"
-          elif [ "${{ github.event.schedule }}" = "30 6,9,12,15 * * *" ]; then
-            report_type="hourly"
-            dry_run="false"
           else
-            report_type="policy"
+            report_type="hourly"
             dry_run="false"
           fi
 
@@ -120,4 +103,12 @@ jobs:
           echo "args=$args" >> "$GITHUB_OUTPUT"
 
       - name: Run report
-        run: python -m googleads_dingtalk ${{ steps.choose-report.outputs.args }}
+        run: |
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt: python -m googleads_dingtalk ${{ steps.choose-report.outputs.args }}"
+            if python -m googleads_dingtalk ${{ steps.choose-report.outputs.args }}; then
+              exit 0
+            fi
+            sleep 60
+          done
+          exit 1
