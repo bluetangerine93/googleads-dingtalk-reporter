@@ -87,10 +87,10 @@ def fb_daily_lines(
     lines = ["", "【Facebook】📊 昨日数据"]
     current_total = total_reports(current_reports)
     previous_total = total_reports(previous_reports)
-    lines.extend(_fb_daily_block("📌 两账户合计", current_total, previous_total, rate))
+    lines.extend(_fb_daily_block("两账户合计", current_total, previous_total, rate))
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
-        lines.extend(_fb_daily_block(f"🔹 {report.name}", report.metrics, previous.metrics, rate))
+        lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
     return lines
 
 
@@ -100,10 +100,9 @@ def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetr
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
-        title,
-        f"💰 消耗：{inr_money(current.spend_inr)} / {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
-        f"🛒 购物次数：{number(current.purchases)} {trend_icon(current.purchases, previous.purchases)}{pct_change(current.purchases, previous.purchases)}",
-        f"💳 单次购物费用：{inr_money(current.cost_per_purchase_inr)} / {money(current_cpp_usd)} {trend_icon(current_cpp_usd, previous_cpp_usd, lower_is_better=True)}{pct_change(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"🔹 {title}",
+        f"💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} / {inr_money(current.spend_inr)}",
+        f"🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}  💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
@@ -115,25 +114,25 @@ def fb_hourly_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】⏱ 实时播报"]
+    lines = ["", "【Facebook】⏱ 实时数据"]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
-        lines.append(_fb_hourly_line(f"🔹 {report.name}", report.metrics, previous.metrics, rate))
-    lines.append(_fb_hourly_line("📌 合计", total_reports(current_reports), total_reports(previous_reports), rate))
-    lines.append("（环比昨日同时段累计）")
+        lines.extend(_fb_hourly_block(report.name, report.metrics, previous.metrics, rate))
+    lines.extend(_fb_hourly_block("两账户合计", total_reports(current_reports), total_reports(previous_reports), rate))
+    lines.append("（Facebook 环比昨日同时段累计）")
     return lines
 
 
-def _fb_hourly_line(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> str:
+def _fb_hourly_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
     current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
-    return (
-        f"{title}  💰 {money(current_spend_usd)} {trend_icon(current_spend_usd, previous_spend_usd, lower_is_better=True)}{pct_change(float(current_spend_usd), float(previous_spend_usd))}  "
-        f"🛒 {number(current.purchases)} {trend_icon(current.purchases, previous.purchases)}{pct_change(current.purchases, previous.purchases)}  "
-        f"💳 {money(current_cpp_usd)} {trend_icon(current_cpp_usd, previous_cpp_usd, lower_is_better=True)}{pct_change(float(current_cpp_usd), float(previous_cpp_usd))}"
-    )
+    return [
+        f"🔹 {title}",
+        f"💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}  🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
+        f"💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+    ]
 
 
 def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
