@@ -30,6 +30,16 @@ def env_int(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def parse_named_accounts(raw_value: str) -> tuple[tuple[str, str], ...]:
+    accounts: list[tuple[str, str]] = []
+    for item in raw_value.split(","):
+        if not item.strip() or ":" not in item:
+            continue
+        name, account_id = item.split(":", 1)
+        accounts.append((name.strip(), account_id.strip()))
+    return tuple(accounts)
+
+
 @dataclass(frozen=True)
 class Settings:
     developer_token: str
@@ -56,6 +66,10 @@ class Settings:
     report_brand: str
     loan_estimate_lookback_days: int
     loan_estimate_exclude_recent_days: int
+    fb_access_token: str
+    fb_api_version: str
+    fb_daily_accounts: tuple[tuple[str, str], ...]
+    fb_purchase_action_types: tuple[str, ...]
 
 
 def load_settings() -> Settings:
@@ -101,6 +115,17 @@ def load_settings() -> Settings:
         report_brand=env("REPORT_BRAND", "PocketMitra"),
         loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 28),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
+        fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
+        fb_api_version=env("FB_API_VERSION", "v19.0"),
+        fb_daily_accounts=parse_named_accounts(env("FB_DAILY_ACCOUNTS")),
+        fb_purchase_action_types=tuple(
+            item.strip()
+            for item in env(
+                "FB_PURCHASE_ACTION_TYPES",
+                "omni_purchase",
+            ).split(",")
+            if item.strip()
+        ),
     )
     missing = [
         name

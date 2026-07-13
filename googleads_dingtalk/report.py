@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from .config import load_settings
 from .dingtalk import send_markdown
 from .estimator import estimate_loans, save_daily_snapshot
+from .facebook_ads import FacebookAccountReport, FacebookMetrics, FacebookAdsReporter, total_reports
 from .fx import get_monthly_rate
 from .google_ads import GoogleAdsReporter, Metrics
 from .policy_monitor import run_policy_monitor
@@ -16,6 +17,11 @@ from .policy_monitor import run_policy_monitor
 def money(value: float | Decimal) -> str:
     amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return f"${amount:,}"
+
+
+def inr_money(value: float | Decimal) -> str:
+    amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"INR {amount:,}"
 
 
 def number(value: float) -> str:
@@ -41,6 +47,10 @@ def convert_cost(cost_inr: float, rate: Decimal) -> Decimal:
     return Decimal(str(cost_inr)) * rate
 
 
+def convert_inr_decimal(cost_inr: Decimal, rate: Decimal) -> Decimal:
+    return cost_inr * rate
+
+
 def usd_to_inr(rate: Decimal) -> Decimal:
     if rate <= 0:
         return Decimal("0")
@@ -57,6 +67,75 @@ def window_label(max_hour: int) -> str:
     return f"00:00-{max_hour:02d}:59 IST"
 
 
+def trend_icon(current: float | Decimal, previous: float | Decimal, lower_is_better: bool = False) -> str:
+    if Decimal(str(previous)) == 0:
+        return ""
+    current_value = Decimal(str(current))
+    previous_value = Decimal(str(previous))
+    improved = current_value <= previous_value if lower_is_better else current_value >= previous_value
+    return "✅" if improved else "⚠️"
+
+
+def fb_daily_lines(
+    current_reports: list[FacebookAccountReport],
+    previous_reports: list[FacebookAccountReport],
+    rate: Decimal,
+) -> list[str]:
+    if not current_reports:
+        return []
+    previous_by_name = {report.name: report for report in previous_reports}
+    lines = ["", "【Facebook】📊 昨日数据"]
+    current_total = total_reports(current_reports)
+    previous_total = total_reports(previous_reports)
+    lines.extend(_fb_daily_block("📌 两账户合计", current_total, previous_total, rate))
+    for report in current_reports:
+        previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
+        lines.extend(_fb_daily_block(f"🔹 {report.name}", report.metrics, previous.metrics, rate))
+    return lines
+
+
+def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
+    current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
+    previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
+    current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
+    previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
+    return [
+        title,
+        f"💰 消耗：{inr_money(current.spend_inr)} / {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
+        f"🛒 购物次数：{number(current.purchases)} {trend_icon(current.purchases, previous.purchases)}{pct_change(current.purchases, previous.purchases)}",
+        f"💳 单次购物费用：{inr_money(current.cost_per_purchase_inr)} / {money(current_cpp_usd)} {trend_icon(current_cpp_usd, previous_cpp_usd, lower_is_better=True)}{pct_change(float(current_cpp_usd), float(previous_cpp_usd))}",
+    ]
+
+
+def fb_hourly_lines(
+    current_reports: list[FacebookAccountReport],
+    previous_reports: list[FacebookAccountReport],
+    rate: Decimal,
+) -> list[str]:
+    if not current_reports:
+        return []
+    previous_by_name = {report.name: report for report in previous_reports}
+    lines = ["", "【Facebook】⏱ 实时播报"]
+    for report in current_reports:
+        previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
+        lines.append(_fb_hourly_line(f"🔹 {report.name}", report.metrics, previous.metrics, rate))
+    lines.append(_fb_hourly_line("📌 合计", total_reports(current_reports), total_reports(previous_reports), rate))
+    lines.append("（环比昨日同时段累计）")
+    return lines
+
+
+def _fb_hourly_line(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> str:
+    current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
+    previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
+    current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
+    previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
+    return (
+        f"{title}  💰 {money(current_spend_usd)} {trend_icon(current_spend_usd, previous_spend_usd, lower_is_better=True)}{pct_change(float(current_spend_usd), float(previous_spend_usd))}  "
+        f"🛒 {number(current.purchases)} {trend_icon(current.purchases, previous.purchases)}{pct_change(current.purchases, previous.purchases)}  "
+        f"💳 {money(current_cpp_usd)} {trend_icon(current_cpp_usd, previous_cpp_usd, lower_is_better=True)}{pct_change(float(current_cpp_usd), float(previous_cpp_usd))}"
+    )
+
+
 def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     settings = load_settings()
     tz = ZoneInfo(settings.report_timezone)
@@ -66,6 +145,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous_day = target_day - timedelta(days=1)
     rate = get_monthly_rate(settings, today)
     reporter = GoogleAdsReporter(settings)
+    fb_reporter = FacebookAdsReporter(settings)
 
     current = reporter.metrics_for_day(target_day)
     previous = reporter.metrics_for_day(previous_day)
@@ -82,22 +162,24 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     actual_loan_cpa = cpa(current_cost, current.loans)
     estimated_loan_cpa = cpa(current_cost, estimated_loans)
     previous_estimated_loan_cpa = cpa(previous_cost, previous_estimated_loans)
+    fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
+    fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
-    text = "\n".join(
-        [
-            f"📣 {settings.report_brand} 日报 推送日期：{today} 统计日期：{target_day}（昨日）",
-            "",
-            f"【Google】💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
-            f"昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈  昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
-            "",
-            f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
-            f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
-            "",
-            f"📝 放款预估：{estimate_note}",
-            f"汇率：1 USD = {usd_to_inr(rate)} INR",
-        ]
-    )
+    lines = [
+        f"📣 {settings.report_brand} 日报 推送日期：{today} 统计日期：{target_day}（昨日）",
+        "",
+        f"【Google】💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
+        f"昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈  昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
+        "",
+        f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
+        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
+        "",
+        f"📝 放款预估：{estimate_note}",
+    ]
+    lines.extend(fb_daily_lines(fb_current, fb_previous, rate))
+    lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
+    text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
 
@@ -110,6 +192,7 @@ def hourly_report(dry_run: bool = False) -> None:
     hour = max(now.hour - 1, 0)
     rate = get_monthly_rate(settings, today)
     reporter = GoogleAdsReporter(settings)
+    fb_reporter = FacebookAdsReporter(settings)
 
     current = reporter.metrics_until_hour(today, hour)
     previous = reporter.metrics_until_hour(yesterday, hour)
@@ -117,21 +200,23 @@ def hourly_report(dry_run: bool = False) -> None:
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_cpa = cpa(current_cost, current.registers)
     previous_cpa = cpa(previous_cost, previous.registers)
+    fb_current = fb_reporter.hourly_reports(today, hour) if fb_reporter.enabled else []
+    fb_previous = fb_reporter.hourly_reports(yesterday, hour) if fb_reporter.enabled else []
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
-    text = "\n".join(
-        [
-            f"📣 {settings.report_brand} 实时数据 印度时间：{now:%H:%M} 统计窗口：",
-            window_label(hour),
-            "",
-            f"【Google】💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝",
-            f"今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 今日 CPA：{money(current_cpa)}",
-            signed_pct(float(current_cpa), float(previous_cpa)),
-            "",
-            f"💰 昨日花费：{money(previous_cost)} 📝 昨日注册：{number(previous.registers)} 📈",
-            f"昨日 CPA：{money(previous_cpa)}",
-        ]
-    )
+    lines = [
+        f"📣 {settings.report_brand} 实时数据 印度时间：{now:%H:%M} 统计窗口：",
+        window_label(hour),
+        "",
+        f"【Google】💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝",
+        f"今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 今日 CPA：{money(current_cpa)}",
+        signed_pct(float(current_cpa), float(previous_cpa)),
+        "",
+        f"💰 昨日花费：{money(previous_cost)} 📝 昨日注册：{number(previous.registers)} 📈",
+        f"昨日 CPA：{money(previous_cpa)}",
+    ]
+    lines.extend(fb_hourly_lines(fb_current, fb_previous, rate))
+    text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
 

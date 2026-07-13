@@ -49,6 +49,10 @@ jobs:
       REPORT_BRAND: PocketMitra
       LOAN_ESTIMATE_LOOKBACK_DAYS: 28
       LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS: 7
+      FB_ACCESS_TOKEN: ${{ secrets.FB_TOKEN }}
+      FB_API_VERSION: v19.0
+      FB_DAILY_ACCOUNTS: PocketMitra-02:act_699832393105441,PocketMitra-04:act_838379439062631
+      FB_PURCHASE_ACTION_TYPES: omni_purchase
 
     steps:
       - name: Check out repository
