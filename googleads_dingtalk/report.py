@@ -84,13 +84,15 @@ def fb_daily_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】📊 昨日数据"]
+    lines = ["", "【Facebook】📊 昨日数据", ""]
     current_total = total_reports(current_reports)
     previous_total = total_reports(previous_reports)
     lines.extend(_fb_daily_block("两账户合计", current_total, previous_total, rate))
+    lines.append("")
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
+        lines.append("")
     return lines
 
 
@@ -114,11 +116,13 @@ def fb_hourly_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】⏱ 实时数据"]
+    lines = ["", "【Facebook】⏱ 实时数据", ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_hourly_block(report.name, report.metrics, previous.metrics, rate))
+        lines.append("")
     lines.extend(_fb_hourly_block("两账户合计", total_reports(current_reports), total_reports(previous_reports), rate))
+    lines.append("")
     lines.append("（Facebook 环比昨日同时段累计）")
     return lines
 
