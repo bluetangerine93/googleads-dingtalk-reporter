@@ -91,16 +91,10 @@ def google_daily_lines(
     estimate_note: str,
 ) -> list[str]:
     return [
-        "【Google】",
-        "",
-        "🔹 账户合计",
-        f"💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
-        f"📝 昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}",
-        f"📈 昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
+        f"【Google】 💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝 昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
         "",
         f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
-        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}",
-        f"📊 预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
+        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
         "",
         f"📝 放款预估：{estimate_note}",
     ]
@@ -115,14 +109,9 @@ def google_hourly_lines(
     previous_cpa: Decimal,
 ) -> list[str]:
     return [
-        "【Google】",
+        f"【Google】 💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝 今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 今日 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
         "",
-        "🔹 账户合计",
-        f"💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
-        f"📝 今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}",
-        f"📈 今日 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
-        "",
-        f"昨日参考：花费 {money(previous_cost)} / 注册 {number(previous.registers)} / CPA {money(previous_cpa)}",
+        f"💰 昨日花费：{money(previous_cost)} 📝 昨日注册：{number(previous.registers)} 📈 昨日 CPA：{money(previous_cpa)}",
     ]
 
 
@@ -134,15 +123,13 @@ def fb_daily_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】", ""]
+    current_total = total_reports(current_reports)
+    previous_total = total_reports(previous_reports)
+    lines = ["", *_fb_daily_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
         lines.append("")
-    current_total = total_reports(current_reports)
-    previous_total = total_reports(previous_reports)
-    lines.extend(_fb_daily_block("两账户合计", current_total, previous_total, rate))
-    lines.append("")
     return lines
 
 
@@ -151,11 +138,9 @@ def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetr
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
+    label = title if title.startswith("【") else f"{title}："
     return [
-        f"🔹 {title}",
-        f"💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
-        f"🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
-        f"💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"{label} 💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
         f"参考 INR：{inr_money(current.spend_inr)}",
     ]
 
@@ -168,13 +153,13 @@ def fb_hourly_lines(
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    lines = ["", "【Facebook】", ""]
+    current_total = total_reports(current_reports)
+    previous_total = total_reports(previous_reports)
+    lines = ["", *_fb_hourly_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_hourly_block(report.name, report.metrics, previous.metrics, rate))
         lines.append("")
-    lines.extend(_fb_hourly_block("两账户合计", total_reports(current_reports), total_reports(previous_reports), rate))
-    lines.append("")
     lines.append("（Facebook 环比昨日同时段累计）")
     return lines
 
@@ -184,11 +169,9 @@ def _fb_hourly_block(title: str, current: FacebookMetrics, previous: FacebookMet
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
+    label = title if title.startswith("【") else f"{title}："
     return [
-        f"🔹 {title}",
-        f"💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
-        f"🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}",
-        f"💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"{label} 💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
         f"昨日参考：花费 {money(previous_spend_usd)} / 购物 {number(previous.purchases)} / 成本 {money(previous_cpp_usd)}",
     ]
 
