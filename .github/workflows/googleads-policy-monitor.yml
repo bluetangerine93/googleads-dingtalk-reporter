@@ -1,9 +1,6 @@
 name: Google Ads Policy Monitor
 
 on:
-  schedule:
-    # Every 30 minutes, offset away from report jobs and GitHub's busiest :00/:30 boundaries.
-    - cron: "5,35 * * * *"
   repository_dispatch:
     types:
       - googleads_policy_monitor

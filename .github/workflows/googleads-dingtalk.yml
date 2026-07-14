@@ -1,11 +1,6 @@
 name: Google & Facebook DingTalk Reports
 
 on:
-  schedule:
-    # 10:00 Asia/Shanghai, 07:30 Asia/Kolkata.
-    - cron: "0 2 * * *"
-    # 12:00, 15:00, 18:00, 21:00 Asia/Kolkata.
-    - cron: "30 6,9,12,15 * * *"
   repository_dispatch:
     types:
       - googleads_report

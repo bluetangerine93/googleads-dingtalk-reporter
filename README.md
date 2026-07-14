@@ -56,7 +56,7 @@ scripts/run_report.sh hourly
 
 ## GitHub Actions
 
-The report workflow in `.github/workflows/googleads-dingtalk.yml` and the policy monitor workflow in `.github/workflows/googleads-policy-monitor.yml` run in GitHub Actions, so the Mac does not need to stay online.
+The report workflow in `.github/workflows/googleads-dingtalk.yml` and the policy monitor workflow in `.github/workflows/googleads-policy-monitor.yml` run in GitHub Actions, so the Mac does not need to stay online. Scheduled runs are triggered by cron-job.org through GitHub's `repository_dispatch` API.
 
 Add these repository secrets in GitHub:
 
@@ -77,17 +77,17 @@ INR_USD_RATE
 
 For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left empty and `GOOGLE_ADS_CUSTOMER_IDS` should be `5309400878`.
 
-Scheduled times are written in UTC:
+Report times:
 
-- Daily: `02:00 UTC`, equal to `10:00 Asia/Shanghai`.
-- Hourly: `06:30`, `09:30`, `12:30`, `15:30 UTC`, equal to `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`.
-- Policy monitor: every 30 minutes at `:05` and `:35` UTC, offset from the report jobs.
+- Daily: `10:00 Asia/Shanghai`.
+- Hourly: `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`, equal to `14:30`, `17:30`, `20:30`, `23:30 Asia/Shanghai`.
+- Policy monitor: every 30 minutes if configured in cron-job.org.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
 
-## Optional external cron trigger
+## External cron trigger
 
-If GitHub scheduled workflows do not fire reliably, use an external scheduler such as cron-job.org to call GitHub's `repository_dispatch` API.
+Use an external scheduler such as cron-job.org to call GitHub's `repository_dispatch` API.
 
 Endpoint:
 
