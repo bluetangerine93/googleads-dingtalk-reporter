@@ -152,19 +152,16 @@ def fb_hourly_lines(
 ) -> list[str]:
     if not current_reports:
         return []
-    previous_by_name = {report.name: report for report in previous_reports}
     current_total = total_reports(current_reports)
     previous_total = total_reports(previous_reports)
-    lines = ["", *_fb_hourly_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
+    lines = ["", *_fb_hourly_total_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
     for report in current_reports:
-        previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
-        lines.extend(_fb_hourly_block(report.name, report.metrics, previous.metrics, rate))
+        lines.extend(_fb_hourly_account_block(report.name, report.metrics, rate))
         lines.append("")
-    lines.append("（Facebook 环比昨日同时段累计）")
     return lines
 
 
-def _fb_hourly_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
+def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
     current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
@@ -173,6 +170,13 @@ def _fb_hourly_block(title: str, current: FacebookMetrics, previous: FacebookMet
     return [
         f"{label} 💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
         f"昨日参考：花费 {money(previous_spend_usd)} / 购物 {number(previous.purchases)} / 成本 {money(previous_cpp_usd)}",
+    ]
+
+
+def _fb_hourly_account_block(title: str, current: FacebookMetrics, rate: Decimal) -> list[str]:
+    current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
+    return [
+        f"{title}： 🛒 今日购物：{number(current.purchases)} 💳 购物成本：{money(current_cpp_usd)}",
     ]
 
 
