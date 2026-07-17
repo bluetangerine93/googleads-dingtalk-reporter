@@ -9,7 +9,7 @@ from .config import ROOT, Settings
 from .google_ads import GoogleAdsReporter, Metrics
 
 
-SNAPSHOTS = ROOT / "data" / "daily_snapshots.json"
+SNAPSHOTS = ROOT / "data" / "adjust_daily_snapshots.json"
 
 
 def _read_snapshots() -> dict:
@@ -31,6 +31,24 @@ def save_daily_snapshot(report_day: date, observed_at: date, metrics: Metrics) -
     SNAPSHOTS.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def update_cohort_snapshots(reporter: GoogleAdsReporter, settings: Settings, observed_at: date) -> None:
+    start = observed_at - timedelta(days=settings.loan_cohort_track_days)
+    end = observed_at - timedelta(days=1)
+    if start > end:
+        return
+    data = _read_snapshots()
+    for report_day, metrics in reporter.metrics_by_day(start, end).items():
+        day_key = report_day.isoformat()
+        data.setdefault(day_key, {})
+        data[day_key][observed_at.isoformat()] = {
+            "cost_inr": getattr(metrics, "cost_inr", 0),
+            "registers": metrics.registers,
+            "loans": metrics.loans,
+        }
+    SNAPSHOTS.parent.mkdir(parents=True, exist_ok=True)
+    SNAPSHOTS.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def estimate_loans(
     reporter: GoogleAdsReporter,
     settings: Settings,
@@ -38,26 +56,11 @@ def estimate_loans(
     observed_metrics: Metrics,
     observed_at: date,
 ) -> tuple[float, str]:
-    lag_curve_estimate = _estimate_from_conversion_lag_curve(reporter, settings, report_day, observed_metrics, observed_at)
-    if lag_curve_estimate is not None:
-        return lag_curve_estimate
-
-    factor_estimate = _estimate_from_snapshot_factor(report_day, observed_metrics.loans, observed_at)
+    factor_estimate = _estimate_from_snapshot_factor(settings, report_day, observed_metrics.loans, observed_at)
     if factor_estimate is not None:
-        return factor_estimate, "基于历史 D+1 回传完成率"
+        return factor_estimate
 
-    end = report_day - timedelta(days=settings.loan_estimate_exclude_recent_days)
-    start = end - timedelta(days=settings.loan_estimate_lookback_days - 1)
-    if start > end:
-        return observed_metrics.loans, "历史样本不足，使用当前已回传值"
-    mature_metrics = reporter.metrics_for_period(start, end)
-    mature_registers = mature_metrics.registers
-    mature_loans = mature_metrics.loans
-    if mature_registers <= 0:
-        return observed_metrics.loans, "历史注册样本不足，使用当前已回传值"
-    loan_rate = mature_loans / mature_registers
-    estimated = max(observed_metrics.loans, observed_metrics.registers * loan_rate)
-    return estimated, f"基于近{settings.loan_estimate_lookback_days}天成熟数据放款/注册率 {loan_rate:.2%}"
+    return observed_metrics.loans, "自有 Adjust cohort 样本不足，使用当前已回传值"
 
 
 def _estimate_from_conversion_lag_curve(
@@ -124,7 +127,12 @@ def _lag_bucket_upper_day(bucket: str) -> int:
     return upper_days.get(bucket, 999)
 
 
-def _estimate_from_snapshot_factor(report_day: date, observed_loans: float, observed_at: date) -> float | None:
+def _estimate_from_snapshot_factor(
+    settings: Settings,
+    report_day: date,
+    observed_loans: float,
+    observed_at: date,
+) -> tuple[float, str] | None:
     if observed_loans <= 0:
         return None
     data = _read_snapshots()
@@ -139,6 +147,9 @@ def _estimate_from_snapshot_factor(report_day: date, observed_loans: float, obse
         current_snapshots = sorted(snapshots.items())
         if not current_snapshots:
             continue
+        final_observed_at = date.fromisoformat(current_snapshots[-1][0])
+        if (final_observed_at - historical_day).days < settings.loan_estimate_exclude_recent_days:
+            continue
         final = current_snapshots[-1][1]
         early_loans = float(early.get("loans", 0))
         final_loans = float(final.get("loans", 0))
@@ -146,4 +157,7 @@ def _estimate_from_snapshot_factor(report_day: date, observed_loans: float, obse
             factors.append(final_loans / early_loans)
     if len(factors) < 3:
         return None
-    return observed_loans * statistics.median(factors)
+    median_factor = statistics.median(factors)
+    completion_rate = 1 / median_factor
+    note = f"基于自有 cohort D+{age_days} 回传完成率 {completion_rate:.2%}（{len(factors)}天样本）"
+    return observed_loans * median_factor, note

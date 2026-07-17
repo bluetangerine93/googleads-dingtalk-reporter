@@ -13,13 +13,20 @@ from .config import Settings
 @dataclass
 class FacebookMetrics:
     spend_inr: Decimal = Decimal("0")
-    purchases: float = 0.0
+    registers: float = 0.0
+    loans: float = 0.0
 
     @property
-    def cost_per_purchase_inr(self) -> Decimal:
-        if self.purchases <= 0:
+    def cpa_inr(self) -> Decimal:
+        if self.registers <= 0:
             return Decimal("0")
-        return self.spend_inr / Decimal(str(self.purchases))
+        return self.spend_inr / Decimal(str(self.registers))
+
+    @property
+    def cps_inr(self) -> Decimal:
+        if self.loans <= 0:
+            return Decimal("0")
+        return self.spend_inr / Decimal(str(self.loans))
 
 
 @dataclass
@@ -51,7 +58,7 @@ class FacebookAdsReporter:
 
     def _metrics_for_day(self, account_id: str, day: date) -> FacebookMetrics:
         rows = self._insights(account_id, day, day)
-        return _sum_rows(rows, self.settings.fb_purchase_action_types)
+        return _sum_rows(rows)
 
     def _metrics_until_hour(self, account_id: str, day: date, max_hour: int) -> FacebookMetrics:
         rows = self._insights(
@@ -61,13 +68,13 @@ class FacebookAdsReporter:
             extra_params={"breakdowns": "hourly_stats_aggregated_by_advertiser_time_zone"},
         )
         selected_rows = [row for row in rows if _row_hour(row) <= max_hour]
-        return _sum_rows(selected_rows, self.settings.fb_purchase_action_types)
+        return _sum_rows(selected_rows)
 
     def _insights(self, account_id: str, start: date, end: date, extra_params: dict[str, str] | None = None) -> list[dict]:
         normalized_account_id = account_id if account_id.startswith("act_") else f"act_{account_id}"
         params = {
             "access_token": self.settings.fb_access_token,
-            "fields": "spend,actions",
+            "fields": "spend",
             "level": "account",
             "time_range": json.dumps({"since": start.isoformat(), "until": end.isoformat()}),
             "limit": "500",
@@ -91,18 +98,15 @@ def total_reports(reports: list[FacebookAccountReport]) -> FacebookMetrics:
     total = FacebookMetrics()
     for report in reports:
         total.spend_inr += report.metrics.spend_inr
-        total.purchases += report.metrics.purchases
+        total.registers += report.metrics.registers
+        total.loans += report.metrics.loans
     return total
 
 
-def _sum_rows(rows: list[dict], purchase_action_types: tuple[str, ...]) -> FacebookMetrics:
+def _sum_rows(rows: list[dict]) -> FacebookMetrics:
     metrics = FacebookMetrics()
-    action_type_set = set(purchase_action_types)
     for row in rows:
         metrics.spend_inr += Decimal(str(row.get("spend", "0") or "0"))
-        for action in row.get("actions", []) or []:
-            if action.get("action_type") in action_type_set:
-                metrics.purchases += float(action.get("value", 0) or 0)
     return metrics
 
 

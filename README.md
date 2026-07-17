@@ -6,8 +6,9 @@ This project sends Google Ads account reports to a DingTalk robot.
 
 - Daily report: runs at 10:00 Asia/Shanghai, which is 07:30 Asia/Kolkata.
 - Hourly reports: run at 12:00, 15:00, 18:00, and 21:00 Asia/Kolkata, which are 14:30, 17:30, 20:30, and 23:30 Asia/Shanghai.
-- Costs are read in INR and converted to USD with one cached monthly rate.
-- Daily loan count uses the current returned loan conversion count plus an estimate. Once the script has accumulated enough daily snapshots, it uses historical D+1 completion factors. Before that, it falls back to the mature historical loan/register rate.
+- Costs are read from the ad accounts in INR and converted to USD with one cached monthly rate.
+- Google and Facebook spend are read from their ad accounts. Register and loan counts are read from Adjust by channel with `attribution_source=first`, then CPA/CPS are calculated from account spend.
+- Daily loan estimate refreshes the last 45 days of Adjust cohorts into `data/adjust_daily_snapshots.json`; once enough mature samples exist, estimates use the account's own D+N completion rate. Before that, it uses the current returned value.
 
 ## Setup
 
@@ -68,6 +69,8 @@ GOOGLE_ADS_REFRESH_TOKEN
 GOOGLE_ADS_LOGIN_CUSTOMER_ID
 GOOGLE_ADS_CUSTOMER_IDS
 FB_TOKEN
+ADJUST_API_TOKEN
+ADJUST_APP_TOKENS
 DINGTALK_WEBHOOK
 POLICY_DINGTALK_WEBHOOK
 POLICY_DINGTALK_SECRET

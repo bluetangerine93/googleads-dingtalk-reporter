@@ -40,6 +40,10 @@ def parse_named_accounts(raw_value: str) -> tuple[tuple[str, str], ...]:
     return tuple(accounts)
 
 
+def parse_csv(raw_value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in raw_value.split(",") if item.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     developer_token: str
@@ -66,10 +70,20 @@ class Settings:
     report_brand: str
     loan_estimate_lookback_days: int
     loan_estimate_exclude_recent_days: int
+    loan_cohort_track_days: int
+    adjust_api_token: str
+    adjust_app_tokens: tuple[str, ...]
+    adjust_register_metric: str
+    adjust_loan_metric: str
+    adjust_register_event_search: str
+    adjust_loan_event_search: str
+    adjust_filter_dimension: str
+    adjust_google_filter_contains: tuple[str, ...]
+    adjust_facebook_filter_contains: tuple[str, ...]
+    adjust_attribution_source: str
     fb_access_token: str
     fb_api_version: str
     fb_daily_accounts: tuple[tuple[str, str], ...]
-    fb_purchase_action_types: tuple[str, ...]
 
 
 def load_settings() -> Settings:
@@ -115,17 +129,20 @@ def load_settings() -> Settings:
         report_brand=env("REPORT_BRAND", "PocketMitra"),
         loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 28),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
+        loan_cohort_track_days=env_int("LOAN_COHORT_TRACK_DAYS", 45),
+        adjust_api_token=env("ADJUST_API_TOKEN"),
+        adjust_app_tokens=parse_csv(env("ADJUST_APP_TOKENS")),
+        adjust_register_metric=env("ADJUST_REGISTER_METRIC"),
+        adjust_loan_metric=env("ADJUST_LOAN_METRIC"),
+        adjust_register_event_search=env("ADJUST_REGISTER_EVENT_SEARCH", "register_success"),
+        adjust_loan_event_search=env("ADJUST_LOAN_EVENT_SEARCH", "first_loan_success"),
+        adjust_filter_dimension=env("ADJUST_FILTER_DIMENSION", "network"),
+        adjust_google_filter_contains=parse_csv(env("ADJUST_GOOGLE_FILTER_CONTAINS", env("ADJUST_FILTER_CONTAINS", "Google Ads"))),
+        adjust_facebook_filter_contains=parse_csv(env("ADJUST_FACEBOOK_FILTER_CONTAINS", "Facebook,Instagram")),
+        adjust_attribution_source=env("ADJUST_ATTRIBUTION_SOURCE", "first"),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),
         fb_daily_accounts=parse_named_accounts(env("FB_DAILY_ACCOUNTS")),
-        fb_purchase_action_types=tuple(
-            item.strip()
-            for item in env(
-                "FB_PURCHASE_ACTION_TYPES",
-                "omni_purchase",
-            ).split(",")
-            if item.strip()
-        ),
     )
     missing = [
         name
