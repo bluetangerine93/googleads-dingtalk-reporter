@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .config import ROOT, Settings, load_settings
+from .config import ROOT, Settings, load_settings, require_config
 from .dingtalk import send_markdown_to
 from .google_ads import GoogleAdsReporter
 from .policy_types import PolicyIssue
@@ -42,6 +42,14 @@ def _format_issue(issue: PolicyIssue) -> str:
 
 def run_policy_monitor(dry_run: bool = False) -> None:
     settings = load_settings()
+    require_config({
+        "GOOGLE_ADS_DEVELOPER_TOKEN": settings.developer_token,
+        "GOOGLE_ADS_CLIENT_ID": settings.client_id,
+        "GOOGLE_ADS_CLIENT_SECRET": settings.client_secret,
+        "GOOGLE_ADS_REFRESH_TOKEN": settings.refresh_token,
+        "GOOGLE_ADS_CUSTOMER_IDS": ",".join(settings.customer_ids),
+        "POLICY_DINGTALK_WEBHOOK": settings.policy_dingtalk_webhook,
+    })
     reporter = GoogleAdsReporter(settings)
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)

@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 from .adjust_kpi import AdjustKpiMetrics, AdjustKpiReporter
-from .config import load_settings
+from .config import load_settings, require_config
 from .dingtalk import send_markdown
 from .estimator import estimate_loans, save_daily_snapshot
 from .facebook_ads import FacebookAccountReport, FacebookMetrics, FacebookAdsReporter, total_reports
@@ -197,6 +197,12 @@ def _fb_hourly_account_block(title: str, current: FacebookMetrics, rate: Decimal
 
 def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     settings = load_settings()
+    _require_google_ads_config(settings)
+    require_config({
+        "DINGTALK_WEBHOOK": settings.dingtalk_webhook,
+        "ADJUST_USER_TOKEN": settings.adjust_user_token,
+        "ADJUST_APP_TOKEN": settings.adjust_app_token,
+    })
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)
     today = now.date()
@@ -206,9 +212,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
     adjust_reporter = AdjustKpiReporter(settings)
-    if not adjust_reporter.enabled:
-        raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
-
     current = reporter.metrics_for_day(target_day)
     previous = reporter.metrics_for_day(previous_day)
     current_adjust = adjust_reporter.channel_totals(target_day, settings.adjust_google_channels)
@@ -279,6 +282,12 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
 
 def hourly_report(dry_run: bool = False) -> None:
     settings = load_settings()
+    _require_google_ads_config(settings)
+    require_config({
+        "DINGTALK_WEBHOOK": settings.dingtalk_webhook,
+        "ADJUST_USER_TOKEN": settings.adjust_user_token,
+        "ADJUST_APP_TOKEN": settings.adjust_app_token,
+    })
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)
     today = now.date()
@@ -288,9 +297,6 @@ def hourly_report(dry_run: bool = False) -> None:
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
     adjust_reporter = AdjustKpiReporter(settings)
-    if not adjust_reporter.enabled:
-        raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
-
     current = reporter.metrics_until_hour(today, hour)
     previous = reporter.metrics_until_hour(yesterday, hour)
     current_adjust = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_google_channels)
@@ -352,6 +358,16 @@ def _facebook_total_with_adjust(
 def _other_facebook_loans(total: AdjustKpiMetrics, account_metrics: dict[str, AdjustKpiMetrics]) -> float:
     account_loans = sum(metrics.loans for metrics in account_metrics.values())
     return max(total.loans - account_loans, 0.0)
+
+
+def _require_google_ads_config(settings) -> None:
+    require_config({
+        "GOOGLE_ADS_DEVELOPER_TOKEN": settings.developer_token,
+        "GOOGLE_ADS_CLIENT_ID": settings.client_id,
+        "GOOGLE_ADS_CLIENT_SECRET": settings.client_secret,
+        "GOOGLE_ADS_REFRESH_TOKEN": settings.refresh_token,
+        "GOOGLE_ADS_CUSTOMER_IDS": ",".join(settings.customer_ids),
+    })
 
 
 def main() -> None:

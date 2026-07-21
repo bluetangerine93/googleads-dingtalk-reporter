@@ -133,18 +133,10 @@ def load_settings() -> Settings:
         fb_api_version=env("FB_API_VERSION", "v19.0"),
         fb_daily_accounts=parse_named_accounts(env("FB_DAILY_ACCOUNTS")),
     )
-    missing = [
-        name
-        for name, value in {
-            "GOOGLE_ADS_DEVELOPER_TOKEN": settings.developer_token,
-            "GOOGLE_ADS_CLIENT_ID": settings.client_id,
-            "GOOGLE_ADS_CLIENT_SECRET": settings.client_secret,
-            "GOOGLE_ADS_REFRESH_TOKEN": settings.refresh_token,
-            "GOOGLE_ADS_CUSTOMER_IDS": ",".join(settings.customer_ids),
-            "DINGTALK_WEBHOOK": settings.dingtalk_webhook,
-        }.items()
-        if not value
-    ]
+    return settings
+
+
+def require_config(values: dict[str, str]) -> None:
+    missing = [name for name, value in values.items() if not value]
     if missing:
         raise ValueError(f"Missing required config: {', '.join(missing)}")
-    return settings
