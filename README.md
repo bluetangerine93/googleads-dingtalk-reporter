@@ -6,8 +6,9 @@ This project sends Google Ads account reports to a DingTalk robot.
 
 - Daily report: runs at 10:00 Asia/Shanghai, which is 07:30 Asia/Kolkata.
 - Hourly reports: run at 12:00, 15:00, 18:00, and 21:00 Asia/Kolkata, which are 14:30, 17:30, 20:30, and 23:30 Asia/Shanghai.
-- Costs are read in INR and converted to USD with one cached monthly rate.
-- Daily loan count uses the current returned loan conversion count plus an estimate. Once the script has accumulated enough daily snapshots, it uses historical D+1 completion factors. Before that, it falls back to the mature historical loan/register rate.
+- Costs are read from Google Ads and Facebook ad accounts in INR and converted to USD with one cached monthly rate.
+- Google Ads and Facebook conversion/event counts are read from Adjust KPI Service by channel. Ad account conversion/action counts are not used in reports.
+- Daily loan count uses the current returned Adjust loan event count plus an estimate. Once the script has accumulated enough daily snapshots, it uses historical D+1 completion factors. Before that, it uses the current returned value.
 
 ## Setup
 
@@ -68,6 +69,7 @@ GOOGLE_ADS_REFRESH_TOKEN
 GOOGLE_ADS_LOGIN_CUSTOMER_ID
 GOOGLE_ADS_CUSTOMER_IDS
 FB_TOKEN
+ADJUST_API_TOKEN
 DINGTALK_WEBHOOK
 POLICY_DINGTALK_WEBHOOK
 POLICY_DINGTALK_SECRET
@@ -84,6 +86,20 @@ Report times:
 - Policy monitor: every 30 minutes if configured in cron-job.org.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
+
+Adjust KPI settings:
+
+```text
+ADJUST_APP_TOKEN=y23vaaza5vcw
+ADJUST_REGISTER_EVENT_TOKEN=elfwqi
+ADJUST_LOAN_EVENT_TOKEN=yogqjh
+ADJUST_GROUPING=partner_name
+ADJUST_UTC_OFFSET=+05:30
+ADJUST_ATTRIBUTION_SOURCE=first
+ADJUST_GOOGLE_CHANNELS=Google Ads
+ADJUST_FACEBOOK_CHANNELS=Facebook
+ADJUST_FACEBOOK_ACCOUNT_PATTERNS=PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04
+```
 
 ## External cron trigger
 

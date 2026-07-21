@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
+from .adjust_kpi import AdjustKpiReporter
 from .config import load_settings
 from .dingtalk import send_markdown
 from .estimator import estimate_loans, save_daily_snapshot
@@ -190,9 +191,18 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     rate = get_monthly_rate(settings, today)
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
+    adjust_reporter = AdjustKpiReporter(settings)
+    if not adjust_reporter.enabled:
+        raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
 
     current = reporter.metrics_for_day(target_day)
     previous = reporter.metrics_for_day(previous_day)
+    current_adjust = adjust_reporter.channel_totals(target_day, settings.adjust_google_channels)
+    previous_adjust = adjust_reporter.channel_totals(previous_day, settings.adjust_google_channels)
+    current.registers = current_adjust.registers
+    current.loans = current_adjust.loans
+    previous.registers = previous_adjust.registers
+    previous.loans = previous_adjust.loans
     estimated_loans, estimate_note = estimate_loans(reporter, settings, target_day, current, today)
     estimated_loans = max(current.loans, round(estimated_loans))
     previous_estimated_loans, _ = estimate_loans(reporter, settings, previous_day, previous, today)
@@ -208,6 +218,8 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous_estimated_loan_cpa = cpa(previous_cost, previous_estimated_loans)
     fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
     fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
+    _apply_facebook_report_adjust(fb_current, adjust_reporter.facebook_account_totals(target_day))
+    _apply_facebook_report_adjust(fb_previous, adjust_reporter.facebook_account_totals(previous_day))
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     lines = [
@@ -247,15 +259,26 @@ def hourly_report(dry_run: bool = False) -> None:
     rate = get_monthly_rate(settings, today)
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
+    adjust_reporter = AdjustKpiReporter(settings)
+    if not adjust_reporter.enabled:
+        raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
 
     current = reporter.metrics_until_hour(today, hour)
     previous = reporter.metrics_until_hour(yesterday, hour)
+    current_adjust = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_google_channels)
+    previous_adjust = adjust_reporter.channel_totals_until_hour(yesterday, hour, settings.adjust_google_channels)
+    current.registers = current_adjust.registers
+    current.loans = current_adjust.loans
+    previous.registers = previous_adjust.registers
+    previous.loans = previous_adjust.loans
     current_cost = convert_cost(current.cost_inr, rate)
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_cpa = cpa(current_cost, current.registers)
     previous_cpa = cpa(previous_cost, previous.registers)
     fb_current = fb_reporter.hourly_reports(today, hour) if fb_reporter.enabled else []
     fb_previous = fb_reporter.hourly_reports(yesterday, hour) if fb_reporter.enabled else []
+    _apply_facebook_report_adjust(fb_current, adjust_reporter.facebook_account_totals_until_hour(today, hour))
+    _apply_facebook_report_adjust(fb_previous, adjust_reporter.facebook_account_totals_until_hour(yesterday, hour))
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
     lines = [
@@ -269,6 +292,12 @@ def hourly_report(dry_run: bool = False) -> None:
     send_markdown(settings, title, text, dry_run=dry_run)
 
 
+def _apply_facebook_report_adjust(reports: list[FacebookAccountReport], account_metrics: dict[str, object]) -> None:
+    for report in reports:
+        metrics = account_metrics.get(report.name)
+        report.metrics.purchases = metrics.loans if metrics else 0.0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -279,11 +308,10 @@ def main() -> None:
     hourly.add_argument("--dry-run", action="store_true")
     policy = subparsers.add_parser("policy")
     policy.add_argument("--dry-run", action="store_true")
-    conversions = subparsers.add_parser("conversions")
-    conversions.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
-    lag = subparsers.add_parser("loan-lag")
-    lag.add_argument("--start", required=True, help="Start date in YYYY-MM-DD")
-    lag.add_argument("--end", required=True, help="End date in YYYY-MM-DD")
+    adjust_channels = subparsers.add_parser("adjust-channels")
+    adjust_channels.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
+    adjust_campaigns = subparsers.add_parser("adjust-campaigns")
+    adjust_campaigns.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
     args = parser.parse_args()
     if args.command == "daily":
         daily_report(dry_run=args.dry_run, report_date=args.date)
@@ -291,25 +319,35 @@ def main() -> None:
         hourly_report(dry_run=args.dry_run)
     elif args.command == "policy":
         run_policy_monitor(dry_run=args.dry_run)
-    elif args.command == "conversions":
+    elif args.command == "adjust-channels":
         settings = load_settings()
         tz = ZoneInfo(settings.report_timezone)
         day = datetime.fromisoformat(args.date).date() if args.date else datetime.now(tz).date() - timedelta(days=1)
-        reporter = GoogleAdsReporter(settings)
-        print(f"Conversion breakdown for {day}:")
-        for name, selected, all_value in reporter.conversion_breakdown(day):
-            print(f"{selected:,.2f}\tall={all_value:,.2f}\t{name}")
-    elif args.command == "loan-lag":
+        reporter = AdjustKpiReporter(settings)
+        print(f"Adjust KPI channels for {day}:")
+        for channel, metrics in sorted(reporter.daily_channel_metrics(day).items()):
+            print(
+                f"{channel}\tinstalls={number(metrics.installs)}"
+                f"\tregisters={number(metrics.registers)}\tloans={number(metrics.loans)}"
+            )
+    elif args.command == "adjust-campaigns":
         settings = load_settings()
-        reporter = GoogleAdsReporter(settings)
-        start = datetime.fromisoformat(args.start).date()
-        end = datetime.fromisoformat(args.end).date()
-        rows = reporter.conversion_lag_breakdown(settings.loan_conversion_name, settings.loan_conversion_metric, start, end)
-        total = sum(rows.values())
-        print(f"Loan lag breakdown for {start} to {end}, total={total:,.2f}:")
-        for bucket, value in sorted(rows.items()):
-            pct = value / total if total else 0
-            print(f"{bucket}\t{value:,.2f}\t{pct:.2%}")
+        tz = ZoneInfo(settings.report_timezone)
+        day = datetime.fromisoformat(args.date).date() if args.date else datetime.now(tz).date() - timedelta(days=1)
+        reporter = AdjustKpiReporter(settings)
+        print(f"Adjust Facebook campaigns for {day}:")
+        for channel, campaign, metrics in reporter.daily_campaign_metrics(day):
+            if channel not in settings.adjust_facebook_channels:
+                continue
+            matched = ""
+            for name, pattern in settings.adjust_facebook_account_patterns:
+                if campaign.casefold().startswith(pattern.casefold()):
+                    matched = name
+                    break
+            print(
+                f"{matched or 'UNMATCHED'}\t{campaign}\tinstalls={number(metrics.installs)}"
+                f"\tregisters={number(metrics.registers)}\tloans={number(metrics.loans)}"
+            )
 
 
 if __name__ == "__main__":

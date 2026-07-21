@@ -40,6 +40,20 @@ def parse_named_accounts(raw_value: str) -> tuple[tuple[str, str], ...]:
     return tuple(accounts)
 
 
+def parse_csv(raw_value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in raw_value.split(",") if item.strip())
+
+
+def parse_named_patterns(raw_value: str) -> tuple[tuple[str, str], ...]:
+    patterns: list[tuple[str, str]] = []
+    for item in raw_value.split(","):
+        if not item.strip() or ":" not in item:
+            continue
+        name, pattern = item.split(":", 1)
+        patterns.append((name.strip(), pattern.strip()))
+    return tuple(patterns)
+
+
 @dataclass(frozen=True)
 class Settings:
     developer_token: str
@@ -48,11 +62,6 @@ class Settings:
     refresh_token: str
     login_customer_id: str
     customer_ids: tuple[str, ...]
-    conversion_metric: str
-    register_conversion_metric: str
-    loan_conversion_metric: str
-    register_conversion_name: str
-    loan_conversion_name: str
     dingtalk_webhook: str
     dingtalk_keyword: str
     dingtalk_secret: str
@@ -66,10 +75,19 @@ class Settings:
     report_brand: str
     loan_estimate_lookback_days: int
     loan_estimate_exclude_recent_days: int
+    adjust_user_token: str
+    adjust_app_token: str
+    adjust_register_event_token: str
+    adjust_loan_event_token: str
+    adjust_grouping: str
+    adjust_utc_offset: str
+    adjust_attribution_source: str
+    adjust_google_channels: tuple[str, ...]
+    adjust_facebook_channels: tuple[str, ...]
+    adjust_facebook_account_patterns: tuple[tuple[str, str], ...]
     fb_access_token: str
     fb_api_version: str
     fb_daily_accounts: tuple[tuple[str, str], ...]
-    fb_purchase_action_types: tuple[str, ...]
 
 
 def load_settings() -> Settings:
@@ -79,17 +97,6 @@ def load_settings() -> Settings:
         for item in env("GOOGLE_ADS_CUSTOMER_IDS").split(",")
         if item.strip()
     )
-    conversion_metric = env("GOOGLE_ADS_CONVERSION_METRIC", "conversions")
-    if conversion_metric not in {"conversions", "all_conversions"}:
-        raise ValueError("GOOGLE_ADS_CONVERSION_METRIC must be conversions or all_conversions")
-    register_conversion_metric = env("REGISTER_CONVERSION_METRIC", conversion_metric)
-    loan_conversion_metric = env("LOAN_CONVERSION_METRIC", conversion_metric)
-    for name, value in {
-        "REGISTER_CONVERSION_METRIC": register_conversion_metric,
-        "LOAN_CONVERSION_METRIC": loan_conversion_metric,
-    }.items():
-        if value not in {"conversions", "all_conversions"}:
-            raise ValueError(f"{name} must be conversions or all_conversions")
     settings = Settings(
         developer_token=env("GOOGLE_ADS_DEVELOPER_TOKEN"),
         client_id=env("GOOGLE_ADS_CLIENT_ID"),
@@ -97,11 +104,6 @@ def load_settings() -> Settings:
         refresh_token=env("GOOGLE_ADS_REFRESH_TOKEN"),
         login_customer_id=env("GOOGLE_ADS_LOGIN_CUSTOMER_ID").replace("-", ""),
         customer_ids=customer_ids,
-        conversion_metric=conversion_metric,
-        register_conversion_metric=register_conversion_metric,
-        loan_conversion_metric=loan_conversion_metric,
-        register_conversion_name=env("REGISTER_CONVERSION_NAME"),
-        loan_conversion_name=env("LOAN_CONVERSION_NAME"),
         dingtalk_webhook=env("DINGTALK_WEBHOOK"),
         dingtalk_keyword=env("DINGTALK_KEYWORD", "推送"),
         dingtalk_secret=env("DINGTALK_SECRET"),
@@ -115,17 +117,21 @@ def load_settings() -> Settings:
         report_brand=env("REPORT_BRAND", "PocketMitra"),
         loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 28),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
+        adjust_user_token=env("ADJUST_USER_TOKEN", env("ADJUST_API_TOKEN")),
+        adjust_app_token=env("ADJUST_APP_TOKEN", "y23vaaza5vcw"),
+        adjust_register_event_token=env("ADJUST_REGISTER_EVENT_TOKEN", "elfwqi"),
+        adjust_loan_event_token=env("ADJUST_LOAN_EVENT_TOKEN", "yogqjh"),
+        adjust_grouping=env("ADJUST_GROUPING", "partner_name"),
+        adjust_utc_offset=env("ADJUST_UTC_OFFSET", "+05:30"),
+        adjust_attribution_source=env("ADJUST_ATTRIBUTION_SOURCE", "first"),
+        adjust_google_channels=parse_csv(env("ADJUST_GOOGLE_CHANNELS", "Google Ads")),
+        adjust_facebook_channels=parse_csv(env("ADJUST_FACEBOOK_CHANNELS", "Facebook")),
+        adjust_facebook_account_patterns=parse_named_patterns(
+            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04")
+        ),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),
         fb_daily_accounts=parse_named_accounts(env("FB_DAILY_ACCOUNTS")),
-        fb_purchase_action_types=tuple(
-            item.strip()
-            for item in env(
-                "FB_PURCHASE_ACTION_TYPES",
-                "omni_purchase",
-            ).split(",")
-            if item.strip()
-        ),
     )
     missing = [
         name
@@ -135,8 +141,6 @@ def load_settings() -> Settings:
             "GOOGLE_ADS_CLIENT_SECRET": settings.client_secret,
             "GOOGLE_ADS_REFRESH_TOKEN": settings.refresh_token,
             "GOOGLE_ADS_CUSTOMER_IDS": ",".join(settings.customer_ids),
-            "REGISTER_CONVERSION_NAME": settings.register_conversion_name,
-            "LOAN_CONVERSION_NAME": settings.loan_conversion_name,
             "DINGTALK_WEBHOOK": settings.dingtalk_webhook,
         }.items()
         if not value
