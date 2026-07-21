@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -13,7 +15,14 @@ from .config import Settings
 @dataclass
 class FacebookMetrics:
     spend_inr: Decimal = Decimal("0")
+    registers: float = 0.0
     purchases: float = 0.0
+
+    @property
+    def cost_per_register_inr(self) -> Decimal:
+        if self.registers <= 0:
+            return Decimal("0")
+        return self.spend_inr / Decimal(str(self.registers))
 
     @property
     def cost_per_purchase_inr(self) -> Decimal:
@@ -78,8 +87,7 @@ class FacebookAdsReporter:
         rows: list[dict] = []
         while url:
             request = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(request, timeout=30) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+            payload = _open_json_request(request)
             if "error" in payload:
                 raise RuntimeError(f"Facebook API error for {normalized_account_id}: {payload['error']}")
             rows.extend(payload.get("data", []))
@@ -91,6 +99,7 @@ def total_reports(reports: list[FacebookAccountReport]) -> FacebookMetrics:
     total = FacebookMetrics()
     for report in reports:
         total.spend_inr += report.metrics.spend_inr
+        total.registers += report.metrics.registers
         total.purchases += report.metrics.purchases
     return total
 
@@ -100,6 +109,24 @@ def _sum_rows(rows: list[dict]) -> FacebookMetrics:
     for row in rows:
         metrics.spend_inr += Decimal(str(row.get("spend", "0") or "0"))
     return metrics
+
+
+def _open_json_request(request: urllib.request.Request) -> dict:
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            if error.code not in {429, 500, 502, 503, 504}:
+                raise RuntimeError(f"Facebook API error {error.code}: {body}") from error
+            last_error = RuntimeError(f"Facebook API error {error.code}: {body}")
+        except urllib.error.URLError as error:
+            last_error = error
+        if attempt < 2:
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"Facebook API request failed after retries: {last_error}") from last_error
 
 
 def _row_hour(row: dict) -> int:

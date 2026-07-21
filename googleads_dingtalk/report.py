@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from .adjust_kpi import AdjustKpiMetrics, AdjustKpiReporter
 from .config import load_settings, require_config
 from .dingtalk import send_markdown
-from .estimator import estimate_loans, save_daily_snapshot
+from .estimator import save_daily_snapshot
 from .facebook_ads import FacebookAccountReport, FacebookMetrics, FacebookAdsReporter, total_reports
 from .fx import get_monthly_rate
 from .google_ads import GoogleAdsReporter, Metrics
@@ -85,19 +85,11 @@ def google_daily_lines(
     current_reg_cpa: Decimal,
     previous_reg_cpa: Decimal,
     actual_loan_cpa: Decimal,
-    estimated_loans: int,
-    previous_estimated_loans: int,
-    estimated_loan_cpa: Decimal,
-    previous_estimated_loan_cpa: Decimal,
-    estimate_note: str,
 ) -> list[str]:
     return [
         f"【Google】 💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝 昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
         "",
         f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
-        f"💵 预估放款：{number(estimated_loans)} {signed_pct(estimated_loans, previous_estimated_loans)}  预估放款成本：{money(estimated_loan_cpa)} {signed_pct(float(estimated_loan_cpa), float(previous_estimated_loan_cpa))}",
-        "",
-        f"📝 放款预估：{estimate_note}",
     ]
 
 
@@ -110,9 +102,8 @@ def google_hourly_lines(
     previous_cpa: Decimal,
 ) -> list[str]:
     return [
-        f"【Google】 💰 今日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝 今日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 今日 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
-        "",
-        f"💰 昨日花费：{money(previous_cost)} 📝 昨日注册：{number(previous.registers)} 📈 昨日 CPA：{money(previous_cpa)}",
+        "【Google】",
+        f"花费 {money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
     ]
 
 
@@ -149,7 +140,6 @@ def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetr
     label = title if title.startswith("【") else f"{title}："
     return [
         f"{label} 💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
-        f"参考 INR：{inr_money(current.spend_inr)}",
     ]
 
 
@@ -166,12 +156,13 @@ def fb_hourly_lines(
         return []
     current_total = current_total or total_reports(current_reports)
     previous_total = previous_total or total_reports(previous_reports)
-    lines = ["", *_fb_hourly_total_block("【Facebook】 总计", current_total, previous_total, rate), ""]
+    lines = ["", *_fb_hourly_total_block("【Facebook】", current_total, previous_total, rate), ""]
     for report in current_reports:
-        lines.extend(_fb_hourly_account_block(report.name, report.metrics, rate))
+        previous = next((item for item in previous_reports if item.name == report.name), None)
+        lines.extend(_fb_hourly_account_block(report.name, report.metrics, previous.metrics if previous else FacebookMetrics(), rate))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
-        lines.append(f"其他账户/归因放款：{number(current_other_loans)}")
+        lines.append(f"其他账户/归因：购物 {number(current_other_loans)}")
         lines.append("")
     return lines
 
@@ -179,19 +170,28 @@ def fb_hourly_lines(
 def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
     current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
+    current_cpa_usd = convert_inr_decimal(current.cost_per_register_inr, rate)
+    previous_cpa_usd = convert_inr_decimal(previous.cost_per_register_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
-    label = title if title.startswith("【") else f"{title}："
     return [
-        f"{label} 💰 今日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 今日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
-        f"昨日参考：花费 {money(previous_spend_usd)} / 购物 {number(previous.purchases)} / 成本 {money(previous_cpp_usd)}",
+        title,
+        f"花费 {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"购物 {number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS {money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
-def _fb_hourly_account_block(title: str, current: FacebookMetrics, rate: Decimal) -> list[str]:
+def _fb_hourly_account_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
+    current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
+    previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
+    current_cpa_usd = convert_inr_decimal(current.cost_per_register_inr, rate)
+    previous_cpa_usd = convert_inr_decimal(previous.cost_per_register_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
+    previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
-        f"{title}： 🛒 今日购物：{number(current.purchases)} 💳 购物成本：{money(current_cpp_usd)}",
+        f"{title}：",
+        f"花费 {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"购物 {number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS {money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
@@ -220,10 +220,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     current.loans = current_adjust.loans
     previous.registers = previous_adjust.registers
     previous.loans = previous_adjust.loans
-    estimated_loans, estimate_note = estimate_loans(reporter, settings, target_day, current, today)
-    estimated_loans = max(current.loans, round(estimated_loans))
-    previous_estimated_loans, _ = estimate_loans(reporter, settings, previous_day, previous, today)
-    previous_estimated_loans = max(previous.loans, round(previous_estimated_loans))
     save_daily_snapshot(target_day, today, current)
 
     current_cost = convert_cost(current.cost_inr, rate)
@@ -231,8 +227,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     current_reg_cpa = cpa(current_cost, current.registers)
     previous_reg_cpa = cpa(previous_cost, previous.registers)
     actual_loan_cpa = cpa(current_cost, current.loans)
-    estimated_loan_cpa = cpa(current_cost, estimated_loans)
-    previous_estimated_loan_cpa = cpa(previous_cost, previous_estimated_loans)
     fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
     fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
     fb_current_adjust_total = adjust_reporter.channel_totals(target_day, settings.adjust_facebook_channels)
@@ -257,11 +251,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             current_reg_cpa,
             previous_reg_cpa,
             actual_loan_cpa,
-            estimated_loans,
-            previous_estimated_loans,
-            estimated_loan_cpa,
-            previous_estimated_loan_cpa,
-            estimate_note,
         )
     )
     lines.extend(
@@ -336,6 +325,7 @@ def hourly_report(dry_run: bool = False) -> None:
             previous_other_loans=_other_facebook_loans(fb_previous_adjust_total, fb_previous_adjust_accounts),
         )
     )
+    lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
@@ -343,6 +333,7 @@ def hourly_report(dry_run: bool = False) -> None:
 def _apply_facebook_report_adjust(reports: list[FacebookAccountReport], account_metrics: dict[str, object]) -> None:
     for report in reports:
         metrics = account_metrics.get(report.name)
+        report.metrics.registers = metrics.registers if metrics else 0.0
         report.metrics.purchases = metrics.loans if metrics else 0.0
 
 
@@ -351,6 +342,7 @@ def _facebook_total_with_adjust(
     adjust_total: AdjustKpiMetrics,
 ) -> FacebookMetrics:
     total = total_reports(reports)
+    total.registers = adjust_total.registers
     total.purchases = adjust_total.loans
     return total
 
