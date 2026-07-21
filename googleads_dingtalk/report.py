@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
-from .adjust_kpi import AdjustKpiReporter
+from .adjust_kpi import AdjustKpiMetrics, AdjustKpiReporter
 from .config import load_settings
 from .dingtalk import send_markdown
 from .estimator import estimate_loans, save_daily_snapshot
@@ -120,16 +120,23 @@ def fb_daily_lines(
     current_reports: list[FacebookAccountReport],
     previous_reports: list[FacebookAccountReport],
     rate: Decimal,
+    current_total: FacebookMetrics | None = None,
+    previous_total: FacebookMetrics | None = None,
+    current_other_loans: float = 0.0,
+    previous_other_loans: float = 0.0,
 ) -> list[str]:
     if not current_reports:
         return []
     previous_by_name = {report.name: report for report in previous_reports}
-    current_total = total_reports(current_reports)
-    previous_total = total_reports(previous_reports)
-    lines = ["", *_fb_daily_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
+    current_total = current_total or total_reports(current_reports)
+    previous_total = previous_total or total_reports(previous_reports)
+    lines = ["", *_fb_daily_block("【Facebook】 总计", current_total, previous_total, rate), ""]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
         lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
+        lines.append("")
+    if current_other_loans > 0 or previous_other_loans > 0:
+        lines.append(f"其他账户/归因放款：{number(current_other_loans)} {signed_pct(current_other_loans, previous_other_loans)}")
         lines.append("")
     return lines
 
@@ -150,14 +157,21 @@ def fb_hourly_lines(
     current_reports: list[FacebookAccountReport],
     previous_reports: list[FacebookAccountReport],
     rate: Decimal,
+    current_total: FacebookMetrics | None = None,
+    previous_total: FacebookMetrics | None = None,
+    current_other_loans: float = 0.0,
+    previous_other_loans: float = 0.0,
 ) -> list[str]:
     if not current_reports:
         return []
-    current_total = total_reports(current_reports)
-    previous_total = total_reports(previous_reports)
-    lines = ["", *_fb_hourly_total_block("【Facebook】 两账户合计", current_total, previous_total, rate), ""]
+    current_total = current_total or total_reports(current_reports)
+    previous_total = previous_total or total_reports(previous_reports)
+    lines = ["", *_fb_hourly_total_block("【Facebook】 总计", current_total, previous_total, rate), ""]
     for report in current_reports:
         lines.extend(_fb_hourly_account_block(report.name, report.metrics, rate))
+        lines.append("")
+    if current_other_loans > 0 or previous_other_loans > 0:
+        lines.append(f"其他账户/归因放款：{number(current_other_loans)}")
         lines.append("")
     return lines
 
@@ -218,8 +232,12 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous_estimated_loan_cpa = cpa(previous_cost, previous_estimated_loans)
     fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
     fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
-    _apply_facebook_report_adjust(fb_current, adjust_reporter.facebook_account_totals(target_day))
-    _apply_facebook_report_adjust(fb_previous, adjust_reporter.facebook_account_totals(previous_day))
+    fb_current_adjust_total = adjust_reporter.channel_totals(target_day, settings.adjust_facebook_channels)
+    fb_previous_adjust_total = adjust_reporter.channel_totals(previous_day, settings.adjust_facebook_channels)
+    fb_current_adjust_accounts = adjust_reporter.facebook_account_totals(target_day)
+    fb_previous_adjust_accounts = adjust_reporter.facebook_account_totals(previous_day)
+    _apply_facebook_report_adjust(fb_current, fb_current_adjust_accounts)
+    _apply_facebook_report_adjust(fb_previous, fb_previous_adjust_accounts)
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     lines = [
@@ -243,7 +261,17 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             estimate_note,
         )
     )
-    lines.extend(fb_daily_lines(fb_current, fb_previous, rate))
+    lines.extend(
+        fb_daily_lines(
+            fb_current,
+            fb_previous,
+            rate,
+            current_total=_facebook_total_with_adjust(fb_current, fb_current_adjust_total),
+            previous_total=_facebook_total_with_adjust(fb_previous, fb_previous_adjust_total),
+            current_other_loans=_other_facebook_loans(fb_current_adjust_total, fb_current_adjust_accounts),
+            previous_other_loans=_other_facebook_loans(fb_previous_adjust_total, fb_previous_adjust_accounts),
+        )
+    )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
@@ -277,8 +305,12 @@ def hourly_report(dry_run: bool = False) -> None:
     previous_cpa = cpa(previous_cost, previous.registers)
     fb_current = fb_reporter.hourly_reports(today, hour) if fb_reporter.enabled else []
     fb_previous = fb_reporter.hourly_reports(yesterday, hour) if fb_reporter.enabled else []
-    _apply_facebook_report_adjust(fb_current, adjust_reporter.facebook_account_totals_until_hour(today, hour))
-    _apply_facebook_report_adjust(fb_previous, adjust_reporter.facebook_account_totals_until_hour(yesterday, hour))
+    fb_current_adjust_total = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_facebook_channels)
+    fb_previous_adjust_total = adjust_reporter.channel_totals_until_hour(yesterday, hour, settings.adjust_facebook_channels)
+    fb_current_adjust_accounts = adjust_reporter.facebook_account_totals_until_hour(today, hour)
+    fb_previous_adjust_accounts = adjust_reporter.facebook_account_totals_until_hour(yesterday, hour)
+    _apply_facebook_report_adjust(fb_current, fb_current_adjust_accounts)
+    _apply_facebook_report_adjust(fb_previous, fb_previous_adjust_accounts)
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
     lines = [
@@ -287,7 +319,17 @@ def hourly_report(dry_run: bool = False) -> None:
         "",
     ]
     lines.extend(google_hourly_lines(current, previous, current_cost, previous_cost, current_cpa, previous_cpa))
-    lines.extend(fb_hourly_lines(fb_current, fb_previous, rate))
+    lines.extend(
+        fb_hourly_lines(
+            fb_current,
+            fb_previous,
+            rate,
+            current_total=_facebook_total_with_adjust(fb_current, fb_current_adjust_total),
+            previous_total=_facebook_total_with_adjust(fb_previous, fb_previous_adjust_total),
+            current_other_loans=_other_facebook_loans(fb_current_adjust_total, fb_current_adjust_accounts),
+            previous_other_loans=_other_facebook_loans(fb_previous_adjust_total, fb_previous_adjust_accounts),
+        )
+    )
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
@@ -296,6 +338,20 @@ def _apply_facebook_report_adjust(reports: list[FacebookAccountReport], account_
     for report in reports:
         metrics = account_metrics.get(report.name)
         report.metrics.purchases = metrics.loans if metrics else 0.0
+
+
+def _facebook_total_with_adjust(
+    reports: list[FacebookAccountReport],
+    adjust_total: AdjustKpiMetrics,
+) -> FacebookMetrics:
+    total = total_reports(reports)
+    total.purchases = adjust_total.loans
+    return total
+
+
+def _other_facebook_loans(total: AdjustKpiMetrics, account_metrics: dict[str, AdjustKpiMetrics]) -> float:
+    account_loans = sum(metrics.loans for metrics in account_metrics.values())
+    return max(total.loans - account_loans, 0.0)
 
 
 def main() -> None:

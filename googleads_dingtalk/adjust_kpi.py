@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,11 +40,11 @@ class AdjustKpiReporter:
                 channel = _first_text(row, ("channel", "channels", "network", "networks"))
             if not channel:
                 continue
-            metrics[channel] = AdjustKpiMetrics(
-                installs=_float(row.get("installs")),
-                registers=_float(row.get(self.register_metric_key)),
-                loans=_float(row.get(self.loan_metric_key)),
-            )
+            total = metrics.setdefault(channel, AdjustKpiMetrics())
+            row_metrics = self._metrics_from_row(row)
+            total.installs += row_metrics.installs
+            total.registers += row_metrics.registers
+            total.loans += row_metrics.loans
         return metrics
 
     def daily_campaign_metrics(self, day: date) -> list[tuple[str, str, AdjustKpiMetrics]]:
@@ -68,7 +69,13 @@ class AdjustKpiReporter:
             ))
         return metrics
 
-    def channel_totals(self, day: date, channels: tuple[str, ...]) -> AdjustKpiMetrics:
+    def channel_totals(self, day: date, channels: tuple[str, ...], attempts: int = 3) -> AdjustKpiMetrics:
+        total = AdjustKpiMetrics()
+        for _attempt in range(max(attempts, 1)):
+            total = _max_metrics(total, self._channel_totals_once(day, channels))
+        return total
+
+    def _channel_totals_once(self, day: date, channels: tuple[str, ...]) -> AdjustKpiMetrics:
         rows = self.daily_channel_metrics(day)
         total = AdjustKpiMetrics()
         normalized_channels = {_normalize(value) for value in channels}
@@ -174,12 +181,7 @@ class AdjustKpiReporter:
                 "Authorization": f"Bearer {self.settings.adjust_user_token}",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Adjust Report Service API error {error.code}: {body}") from error
+        body = self._open_json_request(request, "Adjust Report Service API")
         return json.loads(body)
 
     def _hourly_rows(self, day: date, grouping: str, hour: int) -> list[dict]:
@@ -218,12 +220,7 @@ class AdjustKpiReporter:
                 "Authorization": f"Bearer {self.settings.adjust_user_token}",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Adjust Report Service events API error {error.code}: {body}") from error
+        body = self._open_json_request(request, "Adjust Report Service events API")
 
         needle = event_token.strip().casefold()
         for row in _find_rows(json.loads(body)):
@@ -232,6 +229,23 @@ class AdjustKpiReporter:
                 if event_id:
                     return event_id
         raise RuntimeError(f"Adjust event token not found in Report Service events list: {event_token}")
+
+    def _open_json_request(self, request: urllib.request.Request, label: str) -> str:
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    return response.read().decode("utf-8")
+            except urllib.error.HTTPError as error:
+                body = error.read().decode("utf-8", errors="replace")
+                if error.code not in {429, 500, 502, 503, 504}:
+                    raise RuntimeError(f"{label} error {error.code}: {body}") from error
+                last_error = RuntimeError(f"{label} error {error.code}: {body}")
+            except urllib.error.URLError as error:
+                last_error = error
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+        raise RuntimeError(f"{label} request failed after retries: {last_error}") from last_error
 
 
 def _find_rows(payload) -> list[dict]:
@@ -272,6 +286,14 @@ def _float(value) -> float:
 
 def _normalize(value: str) -> str:
     return value.strip().casefold()
+
+
+def _max_metrics(left: AdjustKpiMetrics, right: AdjustKpiMetrics) -> AdjustKpiMetrics:
+    return AdjustKpiMetrics(
+        installs=max(left.installs, right.installs),
+        registers=max(left.registers, right.registers),
+        loans=max(left.loans, right.loans),
+    )
 
 
 def _event_matches(row: dict, needle: str) -> bool:
