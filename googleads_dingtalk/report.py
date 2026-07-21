@@ -85,11 +85,12 @@ def google_daily_lines(
     current_reg_cpa: Decimal,
     previous_reg_cpa: Decimal,
     actual_loan_cpa: Decimal,
+    previous_loan_cpa: Decimal,
 ) -> list[str]:
     return [
-        f"【Google】 💰 昨日花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} 📝 昨日注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)} 📈 昨日 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
-        "",
-        f"💵 实际放款：{number(current.loans)}  实际放款成本：{money(actual_loan_cpa)}",
+        "【Google】",
+        f"💰 花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
+        f"💵 放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜💳 CPS：{money(actual_loan_cpa)} {signed_pct(float(actual_loan_cpa), float(previous_loan_cpa))}",
     ]
 
 
@@ -127,7 +128,7 @@ def fb_daily_lines(
         lines.extend(_fb_daily_block(report.name, report.metrics, previous.metrics, rate))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
-        lines.append(f"其他账户/归因放款：{number(current_other_loans)} {signed_pct(current_other_loans, previous_other_loans)}")
+        lines.append(f"其他账户/归因：💵 购物 {number(current_other_loans)} {signed_pct(current_other_loans, previous_other_loans)}")
         lines.append("")
     return lines
 
@@ -135,11 +136,15 @@ def fb_daily_lines(
 def _fb_daily_block(title: str, current: FacebookMetrics, previous: FacebookMetrics, rate: Decimal) -> list[str]:
     current_spend_usd = convert_inr_decimal(current.spend_inr, rate)
     previous_spend_usd = convert_inr_decimal(previous.spend_inr, rate)
+    current_cpa_usd = convert_inr_decimal(current.cost_per_register_inr, rate)
+    previous_cpa_usd = convert_inr_decimal(previous.cost_per_register_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     label = title if title.startswith("【") else f"{title}："
     return [
-        f"{label} 💰 昨日花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} 🛒 昨日购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)} 💳 购物成本：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        label,
+        f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
@@ -227,6 +232,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     current_reg_cpa = cpa(current_cost, current.registers)
     previous_reg_cpa = cpa(previous_cost, previous.registers)
     actual_loan_cpa = cpa(current_cost, current.loans)
+    previous_loan_cpa = cpa(previous_cost, previous.loans)
     fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
     fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
     fb_current_adjust_total = adjust_reporter.channel_totals(target_day, settings.adjust_facebook_channels)
@@ -251,6 +257,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             current_reg_cpa,
             previous_reg_cpa,
             actual_loan_cpa,
+            previous_loan_cpa,
         )
     )
     lines.extend(
