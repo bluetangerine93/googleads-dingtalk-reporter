@@ -104,7 +104,7 @@ def google_hourly_lines(
 ) -> list[str]:
     return [
         "【Google】",
-        f"花费 {money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
+        f"💰 花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
     ]
 
 
@@ -167,7 +167,7 @@ def fb_hourly_lines(
         lines.extend(_fb_hourly_account_block(report.name, report.metrics, previous.metrics if previous else FacebookMetrics(), rate))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
-        lines.append(f"其他账户/归因：购物 {number(current_other_loans)}")
+        lines.append(f"其他账户/归因：💵 购物 {number(current_other_loans)}")
         lines.append("")
     return lines
 
@@ -181,8 +181,8 @@ def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: Faceb
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
         title,
-        f"花费 {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"购物 {number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS {money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
@@ -195,8 +195,8 @@ def _fb_hourly_account_block(title: str, current: FacebookMetrics, previous: Fac
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
         f"{title}：",
-        f"花费 {money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜注册 {number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA {money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"购物 {number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS {money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
     ]
 
 
