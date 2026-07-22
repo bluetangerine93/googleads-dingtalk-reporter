@@ -14,6 +14,7 @@ from .facebook_ads import FacebookAccountReport, FacebookMetrics, FacebookAdsRep
 from .fx import get_monthly_rate
 from .google_ads import GoogleAdsReporter, Metrics
 from .policy_monitor import run_policy_monitor
+from .visa_reminder import run_visa_balance_reminder
 
 
 def money(value: float | Decimal) -> str:
@@ -383,6 +384,9 @@ def main() -> None:
     fb_balance = subparsers.add_parser("fb-balance")
     fb_balance.add_argument("--dry-run", action="store_true")
     fb_balance.add_argument("--mode", choices=("all", "balance", "status"), default="all")
+    visa_reminder = subparsers.add_parser("visa-reminder")
+    visa_reminder.add_argument("--dry-run", action="store_true")
+    visa_reminder.add_argument("--period", choices=("daily", "before_work", "before_off_work"), default="daily")
     adjust_channels = subparsers.add_parser("adjust-channels")
     adjust_channels.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
     adjust_campaigns = subparsers.add_parser("adjust-campaigns")
@@ -396,6 +400,8 @@ def main() -> None:
         run_policy_monitor(dry_run=args.dry_run)
     elif args.command == "fb-balance":
         run_fb_balance_monitor(dry_run=args.dry_run, mode=args.mode)
+    elif args.command == "visa-reminder":
+        run_visa_balance_reminder(period=args.period, dry_run=args.dry_run)
     elif args.command == "adjust-channels":
         settings = load_settings()
         tz = ZoneInfo(settings.report_timezone)
