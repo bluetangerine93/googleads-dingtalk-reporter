@@ -5,7 +5,7 @@ This project sends Google Ads account reports to a DingTalk robot.
 ## Reports
 
 - Daily report: runs at 10:00 Asia/Shanghai, which is 07:30 Asia/Kolkata.
-- Hourly reports: run at 12:00, 15:00, 18:00, and 21:00 Asia/Kolkata, which are 14:30, 17:30, 20:30, and 23:30 Asia/Shanghai.
+- Hourly reports: run at 11:00, 14:00, 17:00, 20:00, and 23:00 Asia/Shanghai, which are 08:30, 11:30, 14:30, 17:30, and 20:30 Asia/Kolkata.
 - Costs are read from Google Ads and Facebook ad accounts in INR and converted to USD with one cached monthly rate.
 - Google Ads and Facebook conversion/event counts are read from Adjust KPI Service by channel. Ad account conversion/action counts are not used in reports.
 - Daily loan count uses the current returned Adjust loan event count plus an estimate. Once the script has accumulated enough daily snapshots, it uses historical D+1 completion factors. Before that, it uses the current returned value.
@@ -82,7 +82,7 @@ For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left
 Report times:
 
 - Daily: `10:00 Asia/Shanghai`.
-- Hourly: `12:00`, `15:00`, `18:00`, `21:00 Asia/Kolkata`, equal to `14:30`, `17:30`, `20:30`, `23:30 Asia/Shanghai`.
+- Hourly: `11:00`, `14:00`, `17:00`, `20:00`, `23:00 Asia/Shanghai`, equal to `08:30`, `11:30`, `14:30`, `17:30`, `20:30 Asia/Kolkata`.
 - Policy monitor: every 30 minutes if configured in cron-job.org.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
