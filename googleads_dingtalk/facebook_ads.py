@@ -38,6 +38,18 @@ class FacebookAccountReport:
     metrics: FacebookMetrics
 
 
+@dataclass
+class FacebookAccountBalance:
+    name: str
+    account_id: str
+    facebook_name: str
+    balance_inr: Decimal
+    currency: str
+    account_status: int
+    disable_reason: int
+    funding_source: str
+
+
 class FacebookAdsReporter:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -57,6 +69,31 @@ class FacebookAdsReporter:
             FacebookAccountReport(name, account_id, self._metrics_until_hour(account_id, day, max_hour))
             for name, account_id in self.settings.fb_daily_accounts
         ]
+
+    def account_balances(self) -> list[FacebookAccountBalance]:
+        return [
+            self._account_balance(name, account_id)
+            for name, account_id in self.settings.fb_daily_accounts
+        ]
+
+    def _account_balance(self, name: str, account_id: str) -> FacebookAccountBalance:
+        normalized_account_id = account_id if account_id.startswith("act_") else f"act_{account_id}"
+        params = {
+            "access_token": self.settings.fb_access_token,
+            "fields": "id,name,account_id,account_status,balance,currency,disable_reason,funding_source_details",
+        }
+        url = f"https://graph.facebook.com/{self.settings.fb_api_version}/{normalized_account_id}?{urllib.parse.urlencode(params)}"
+        payload = _open_json_request(urllib.request.Request(url, headers={"Accept": "application/json"}))
+        return FacebookAccountBalance(
+            name=name,
+            account_id=payload.get("account_id", account_id.replace("act_", "")),
+            facebook_name=payload.get("name", name),
+            balance_inr=_minor_units_to_currency(payload.get("balance")),
+            currency=payload.get("currency", ""),
+            account_status=int(payload.get("account_status") or 0),
+            disable_reason=int(payload.get("disable_reason") or 0),
+            funding_source=(payload.get("funding_source_details") or {}).get("display_string", ""),
+        )
 
     def _metrics_for_day(self, account_id: str, day: date) -> FacebookMetrics:
         rows = self._insights(account_id, day, day)
@@ -109,6 +146,10 @@ def _sum_rows(rows: list[dict]) -> FacebookMetrics:
     for row in rows:
         metrics.spend_inr += Decimal(str(row.get("spend", "0") or "0"))
     return metrics
+
+
+def _minor_units_to_currency(value) -> Decimal:
+    return (Decimal(str(value or "0")) / Decimal("100")).quantize(Decimal("0.01"))
 
 
 def _open_json_request(request: urllib.request.Request) -> dict:

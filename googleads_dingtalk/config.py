@@ -88,6 +88,9 @@ class Settings:
     fb_access_token: str
     fb_api_version: str
     fb_daily_accounts: tuple[tuple[str, str], ...]
+    fb_balance_threshold_inr: int
+    lark_balance_webhook: str
+    lark_balance_keyword: str
 
 
 def load_settings() -> Settings:
@@ -132,6 +135,9 @@ def load_settings() -> Settings:
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),
         fb_daily_accounts=parse_named_accounts(env("FB_DAILY_ACCOUNTS")),
+        fb_balance_threshold_inr=env_int("FB_BALANCE_THRESHOLD_INR", 20000),
+        lark_balance_webhook=env("LARK_BALANCE_WEBHOOK"),
+        lark_balance_keyword=env("LARK_BALANCE_KEYWORD", "notification"),
     )
     return settings
 
