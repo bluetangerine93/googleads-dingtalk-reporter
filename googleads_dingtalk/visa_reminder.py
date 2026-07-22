@@ -36,7 +36,7 @@ def _format_reminder_card(now: datetime, period: str) -> dict:
             "template": "blue",
             "title": {
                 "tag": "plain_text",
-                "content": "notification | Visa Balance Check Reminder",
+                "content": "notification | Visa Auto Pay Check",
             },
         },
         "elements": [
@@ -47,7 +47,7 @@ def _format_reminder_card(now: datetime, period: str) -> dict:
                     "content": (
                         f"**Time:** {now:%Y-%m-%d %H:%M} CST\n"
                         f"**Reminder:** {period_label}\n"
-                        "**Action:** Please check whether the Visa card has enough available balance."
+                        "**Action:** Please check whether the auto pay Visa card has enough available balance."
                     ),
                 },
             },
