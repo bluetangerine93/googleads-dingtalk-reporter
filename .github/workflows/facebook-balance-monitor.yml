@@ -4,8 +4,18 @@ on:
   repository_dispatch:
     types:
       - fb_balance_monitor
+      - fb_account_status_monitor
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Monitor mode"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - balance
+          - status
       dry_run:
         description: "Print Lark payload without sending"
         required: true
@@ -42,7 +52,17 @@ jobs:
       - name: Choose args
         id: choose-args
         run: |
-          args="fb-balance"
+          mode="all"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            mode="${{ inputs.mode }}"
+          elif [ "${{ github.event.action }}" = "fb_balance_monitor" ]; then
+            mode="balance"
+          elif [ "${{ github.event.action }}" = "fb_account_status_monitor" ]; then
+            mode="status"
+          elif [ -n "${{ github.event.client_payload.mode }}" ]; then
+            mode="${{ github.event.client_payload.mode }}"
+          fi
+          args="fb-balance --mode $mode"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             args="$args --dry-run"
           elif [ "${{ github.event_name }}" = "repository_dispatch" ] && [ "${{ github.event.client_payload.dry_run }}" = "true" ]; then

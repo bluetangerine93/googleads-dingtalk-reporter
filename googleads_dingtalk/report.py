@@ -382,6 +382,7 @@ def main() -> None:
     policy.add_argument("--dry-run", action="store_true")
     fb_balance = subparsers.add_parser("fb-balance")
     fb_balance.add_argument("--dry-run", action="store_true")
+    fb_balance.add_argument("--mode", choices=("all", "balance", "status"), default="all")
     adjust_channels = subparsers.add_parser("adjust-channels")
     adjust_channels.add_argument("--date", help="Date in YYYY-MM-DD, defaults to yesterday in report timezone")
     adjust_campaigns = subparsers.add_parser("adjust-campaigns")
@@ -394,7 +395,7 @@ def main() -> None:
     elif args.command == "policy":
         run_policy_monitor(dry_run=args.dry_run)
     elif args.command == "fb-balance":
-        run_fb_balance_monitor(dry_run=args.dry_run)
+        run_fb_balance_monitor(dry_run=args.dry_run, mode=args.mode)
     elif args.command == "adjust-channels":
         settings = load_settings()
         tz = ZoneInfo(settings.report_timezone)

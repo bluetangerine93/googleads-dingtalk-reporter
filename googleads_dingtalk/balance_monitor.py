@@ -51,7 +51,9 @@ class BalanceAlert:
     reasons: tuple[str, ...]
 
 
-def run_fb_balance_monitor(dry_run: bool = False) -> None:
+def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
+    if mode not in {"all", "balance", "status"}:
+        raise ValueError(f"Unsupported Facebook balance monitor mode: {mode}")
     settings = load_settings()
     require_config({
         "FB_ACCESS_TOKEN": settings.fb_access_token,
@@ -64,16 +66,16 @@ def run_fb_balance_monitor(dry_run: bool = False) -> None:
     alerts = [
         alert
         for balance in balances
-        if (alert := _balance_alert(balance, threshold)) is not None
+        if (alert := _balance_alert(balance, threshold, mode)) is not None
     ]
     if not alerts:
         if dry_run:
-            print("No low balance or inactive accounts.")
+            print(f"No Facebook account alerts for mode: {mode}.")
         return
 
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)
-    card = _format_balance_alert_card(now, alerts, threshold)
+    card = _format_balance_alert_card(now, alerts, threshold, mode)
     send_interactive_card(
         settings.lark_balance_webhook,
         settings.lark_balance_keyword,
@@ -82,11 +84,11 @@ def run_fb_balance_monitor(dry_run: bool = False) -> None:
     )
 
 
-def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal) -> BalanceAlert | None:
+def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal, mode: str) -> BalanceAlert | None:
     reasons: list[str] = []
-    if balance.currency == "INR" and balance.balance_inr < threshold:
+    if mode in {"all", "balance"} and balance.currency == "INR" and balance.balance_inr < threshold:
         reasons.append("Balance below threshold")
-    if balance.account_status != ACTIVE_ACCOUNT_STATUS:
+    if mode in {"all", "status"} and balance.account_status != ACTIVE_ACCOUNT_STATUS:
         status_text = account_status_label(balance.account_status)
         detail_text = account_status_detail(balance)
         reasons.append(f"Account status is {status_text}" + (f" ({detail_text})" if detail_text else ""))
@@ -95,17 +97,24 @@ def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal) -> Balan
     return BalanceAlert(balance=balance, reasons=tuple(reasons))
 
 
-def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], threshold: Decimal) -> dict:
+def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], threshold: Decimal, mode: str) -> dict:
+    title = {
+        "balance": "PocketMitra FB Balance Alert",
+        "status": "PocketMitra FB Account Status Alert",
+    }.get(mode, "PocketMitra FB Account Alert")
+    summary_lines = [
+        f"**Time:** {now:%Y-%m-%d %H:%M} IST",
+        f"**Mode:** {mode.title()}",
+    ]
+    if mode in {"all", "balance"}:
+        summary_lines.append(f"**Threshold:** INR {threshold:,.2f}")
+    summary_lines.append(f"**Alerts:** {len(alerts)} account(s)")
     elements = [
         {
             "tag": "div",
             "text": {
                 "tag": "lark_md",
-                "content": (
-                    f"**Time:** {now:%Y-%m-%d %H:%M} IST\n"
-                    f"**Threshold:** INR {threshold:,.2f}\n"
-                    f"**Alerts:** {len(alerts)} account(s)"
-                ),
+                "content": "\n".join(summary_lines),
             },
         },
         {"tag": "hr"},
@@ -135,7 +144,7 @@ def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], thresh
             "template": "red",
             "title": {
                 "tag": "plain_text",
-                "content": "notification | PocketMitra FB Balance Alert",
+                "content": f"notification | {title}",
             },
         },
         "elements": elements,
