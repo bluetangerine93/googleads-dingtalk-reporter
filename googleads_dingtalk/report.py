@@ -103,10 +103,13 @@ def google_hourly_lines(
     previous_cost: Decimal,
     current_cpa: Decimal,
     previous_cpa: Decimal,
+    current_loan_cpa: Decimal,
+    previous_loan_cpa: Decimal,
 ) -> list[str]:
     return [
         "【Google】",
         f"💰 花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
+        f"💵 放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜💳 CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}",
     ]
 
 
@@ -307,6 +310,8 @@ def hourly_report(dry_run: bool = False) -> None:
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_cpa = cpa(current_cost, current.registers)
     previous_cpa = cpa(previous_cost, previous.registers)
+    current_loan_cpa = cpa(current_cost, current.loans)
+    previous_loan_cpa = cpa(previous_cost, previous.loans)
     fb_current = fb_reporter.hourly_reports(today, hour) if fb_reporter.enabled else []
     fb_previous = fb_reporter.hourly_reports(yesterday, hour) if fb_reporter.enabled else []
     fb_current_adjust_total = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_facebook_channels)
@@ -322,7 +327,18 @@ def hourly_report(dry_run: bool = False) -> None:
         f"印度时间：{now:%H:%M}  统计窗口：{window_label(hour)}",
         "",
     ]
-    lines.extend(google_hourly_lines(current, previous, current_cost, previous_cost, current_cpa, previous_cpa))
+    lines.extend(
+        google_hourly_lines(
+            current,
+            previous,
+            current_cost,
+            previous_cost,
+            current_cpa,
+            previous_cpa,
+            current_loan_cpa,
+            previous_loan_cpa,
+        )
+    )
     lines.extend(
         fb_hourly_lines(
             fb_current,
