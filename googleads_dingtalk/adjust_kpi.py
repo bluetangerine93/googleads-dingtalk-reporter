@@ -101,6 +101,26 @@ class AdjustKpiReporter:
             total.loans += metrics.loans
         return total
 
+    def channel_totals_by_day(self, start: date, end: date, channels: tuple[str, ...]) -> dict[date, AdjustKpiMetrics]:
+        normalized_channels = {_normalize(value) for value in channels}
+        totals: dict[date, AdjustKpiMetrics] = {}
+        payload = self._request(start, end, f"day,{self.settings.adjust_grouping}")
+        for row in _find_rows(payload):
+            day = _row_day(row)
+            if day is None:
+                continue
+            channel = _text(row, self.settings.adjust_grouping)
+            if not channel:
+                channel = _first_text(row, ("channel", "channels", "network", "networks"))
+            if _normalize(channel) not in normalized_channels:
+                continue
+            row_metrics = self._metrics_from_row(row)
+            total = totals.setdefault(day, AdjustKpiMetrics())
+            total.installs += row_metrics.installs
+            total.registers += row_metrics.registers
+            total.loans += row_metrics.loans
+        return totals
+
     def facebook_account_totals(self, day: date) -> dict[str, AdjustKpiMetrics]:
         totals = {
             name: AdjustKpiMetrics()
@@ -118,6 +138,34 @@ class AdjustKpiReporter:
             total.registers += metrics.registers
             total.loans += metrics.loans
         return totals
+
+    def facebook_account_totals_by_day(self, start: date, end: date) -> dict[date, dict[str, AdjustKpiMetrics]]:
+        totals_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
+        channel_set = {_normalize(value) for value in self.settings.adjust_facebook_channels}
+        payload = self._request(start, end, f"day,{self.settings.adjust_grouping},campaign")
+        for row in _find_rows(payload):
+            day = _row_day(row)
+            if day is None:
+                continue
+            channel = _text(row, self.settings.adjust_grouping)
+            if not channel:
+                channel = _first_text(row, ("channel", "channels", "network", "networks"))
+            if _normalize(channel) not in channel_set:
+                continue
+            campaign = _first_text(row, ("campaign", "campaigns", "campaign_name", "campaign_names"))
+            account_name = self._match_facebook_account(campaign)
+            if not account_name:
+                continue
+            day_totals = totals_by_day.setdefault(day, {
+                name: AdjustKpiMetrics()
+                for name, _pattern in self.settings.adjust_facebook_account_patterns
+            })
+            row_metrics = self._metrics_from_row(row)
+            total = day_totals.setdefault(account_name, AdjustKpiMetrics())
+            total.installs += row_metrics.installs
+            total.registers += row_metrics.registers
+            total.loans += row_metrics.loans
+        return totals_by_day
 
     def facebook_account_totals_until_hour(self, day: date, hour: int) -> dict[str, AdjustKpiMetrics]:
         totals = {
@@ -316,6 +364,19 @@ def _row_hour_in_window(row: dict, day: date, hour: int) -> bool:
     except ValueError:
         return False
     return row_time.date() == day and 0 <= row_time.hour <= hour
+
+
+def _row_day(row: dict) -> date | None:
+    day_value = _first_text(row, ("day", "date", "Day (date)"))
+    if not day_value:
+        return None
+    try:
+        return datetime.fromisoformat(day_value.replace("Z", "+00:00")).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(day_value[:10])
+        except ValueError:
+            return None
 
 
 def _validate_header_value(name: str, value: str) -> None:
