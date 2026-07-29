@@ -118,7 +118,7 @@ def load_settings() -> Settings:
         target_currency=env("TARGET_CURRENCY", "USD"),
         inr_usd_rate=env("INR_USD_RATE"),
         report_brand=env("REPORT_BRAND", "PocketMitra"),
-        loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 28),
+        loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 14),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
         adjust_user_token=env("ADJUST_USER_TOKEN", env("ADJUST_API_TOKEN")),
         adjust_app_token=env("ADJUST_APP_TOKEN", "y23vaaza5vcw"),
