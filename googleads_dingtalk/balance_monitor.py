@@ -126,7 +126,7 @@ def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], thresh
             "text": {
                 "tag": "lark_md",
                 "content": "\n".join([
-                    f"**{_md_escape(balance.name)}** ({_md_escape(balance.account_id)})",
+                    f"**{_md_escape(_short_account_name(balance.name))}** ({_md_escape(balance.account_id)})",
                     f"**Balance:** **INR {balance.balance_inr:,.2f}**",
                     f"**Status:** **{_md_escape(account_status_label(balance.account_status))}**",
                     f"Detail: {_md_escape(account_status_detail(balance) or 'N/A')}",
@@ -153,6 +153,10 @@ def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], thresh
 
 def _md_escape(value: object) -> str:
     return str(value).replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_").replace("`", "\\`")
+
+
+def _short_account_name(name: str) -> str:
+    return name.replace("PocketMitra", "PM", 1) if name.startswith("PocketMitra") else name
 
 
 def account_status_label(status: int) -> str:

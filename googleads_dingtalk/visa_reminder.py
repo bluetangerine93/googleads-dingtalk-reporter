@@ -58,7 +58,7 @@ def _format_reminder_card(now: datetime, period: str) -> dict:
                 "tag": "div",
                 "text": {
                     "tag": "lark_md",
-                    "content": "**Accounts:** PocketMitra-02 / PocketMitra-04",
+                    "content": "**Accounts:** PM-02 / PM-04",
                 },
             },
         ],
