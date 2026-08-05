@@ -99,9 +99,9 @@ def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal, mode: st
 
 def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], threshold: Decimal, mode: str) -> dict:
     title = {
-        "balance": "PocketMitra FB Balance Alert",
-        "status": "PocketMitra FB Account Status Alert",
-    }.get(mode, "PocketMitra FB Account Alert")
+        "balance": "PM FB Balance Alert",
+        "status": "PM FB Account Status Alert",
+    }.get(mode, "PM FB Account Alert")
     summary_lines = [
         f"**Time:** {now:%Y-%m-%d %H:%M} IST",
         f"**Mode:** {mode.title()}",
