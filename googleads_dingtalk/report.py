@@ -198,7 +198,8 @@ def _fb_daily_block(
         lines.append(
             f"💵 已回传购物：{number(current.purchases)}｜"
             f"预估购物：{number(current_estimate.estimated_loans)} {signed_pct(current_estimate.estimated_loans, previous_estimate.estimated_loans)}｜"
-            f"💳 预估CPS：{money(current_estimated_cpp)} {signed_pct(float(current_estimated_cpp), float(previous_estimated_cpp))}"
+            f"💳 实际CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜"
+            f"预估CPS：{money(current_estimated_cpp)} {signed_pct(float(current_estimated_cpp), float(previous_estimated_cpp))}"
         )
         if show_estimate_basis:
             if current_estimate.sample_count >= 3:
