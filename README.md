@@ -74,7 +74,7 @@ DINGTALK_WEBHOOK
 POLICY_DINGTALK_WEBHOOK
 POLICY_DINGTALK_SECRET
 DINGTALK_SECRET
-INR_USD_RATE
+INR_USD_RATE (optional manual override; leave empty to auto-fetch one monthly rate)
 ```
 
 For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left empty and `GOOGLE_ADS_CUSTOMER_IDS` should be `5309400878`.
