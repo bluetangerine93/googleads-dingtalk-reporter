@@ -116,9 +116,10 @@ def google_hourly_lines(
     previous_loan_cpa: Decimal,
 ) -> list[str]:
     return [
-        "【Google】",
-        f"💰 花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
-        f"💵 放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜💳 CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}",
+        f"🔍【Google】花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
+        f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
+        f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -239,13 +240,13 @@ def fb_hourly_lines(
         return []
     current_total = current_total or total_reports(current_reports)
     previous_total = previous_total or total_reports(previous_reports)
-    lines = ["", *_fb_hourly_total_block("【Facebook】", current_total, previous_total, rate), ""]
+    lines = ["", *_fb_hourly_total_block("🎭【Facebook】", current_total, previous_total, rate), ""]
     for report in current_reports:
         previous = next((item for item in previous_reports if item.name == report.name), None)
         lines.extend(_fb_hourly_account_block(report.name, report.metrics, previous.metrics if previous else FacebookMetrics(), rate))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
-        lines.append(f"其他账户/归因：💵 购物 {number(current_other_loans)}")
+        lines.append(f"其他账户/归因：购物 {number(current_other_loans)}")
         lines.append("")
     return lines
 
@@ -258,9 +259,10 @@ def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: Faceb
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
-        title,
-        f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"{title}花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
+        f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -272,9 +274,10 @@ def _fb_hourly_account_block(title: str, current: FacebookMetrics, previous: Fac
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
     return [
-        f"{title}：",
-        f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"{title}：花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
+        f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+        f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -301,8 +304,12 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous_adjust = adjust_reporter.channel_totals(previous_day, settings.adjust_google_channels)
     current.registers = current_adjust.registers
     current.loans = current_adjust.loans
+    current.applies = current_adjust.applies
+    current.approvals = current_adjust.approvals
     previous.registers = previous_adjust.registers
     previous.loans = previous_adjust.loans
+    previous.applies = previous_adjust.applies
+    previous.approvals = previous_adjust.approvals
     save_daily_snapshot(target_day, today, current)
 
     current_cost = convert_cost(current.cost_inr, rate)
@@ -390,8 +397,12 @@ def hourly_report(dry_run: bool = False) -> None:
     previous_adjust = adjust_reporter.channel_totals_until_hour(yesterday, hour, settings.adjust_google_channels)
     current.registers = current_adjust.registers
     current.loans = current_adjust.loans
+    current.applies = current_adjust.applies
+    current.approvals = current_adjust.approvals
     previous.registers = previous_adjust.registers
     previous.loans = previous_adjust.loans
+    previous.applies = previous_adjust.applies
+    previous.approvals = previous_adjust.approvals
     current_cost = convert_cost(current.cost_inr, rate)
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_cpa = cpa(current_cost, current.registers)
@@ -409,8 +420,7 @@ def hourly_report(dry_run: bool = False) -> None:
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
     lines = [
-        f"📣 {settings.report_brand} 实时数据",
-        f"印度时间：{now:%H:%M}  统计窗口：{window_label(hour)}",
+        f"📣 {settings.report_brand} 实时数据 印度时间：{now:%H:%M}  统计窗口：{window_label(hour)}",
         "",
     ]
     lines.extend(

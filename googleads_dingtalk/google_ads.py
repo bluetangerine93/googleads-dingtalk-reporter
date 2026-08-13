@@ -14,6 +14,8 @@ class Metrics:
     cost_inr: float = 0.0
     registers: float = 0.0
     loans: float = 0.0
+    applies: float = 0.0
+    approvals: float = 0.0
 
 
 class GoogleAdsReporter:
