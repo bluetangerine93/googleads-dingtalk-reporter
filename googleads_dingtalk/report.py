@@ -17,6 +17,9 @@ from .policy_monitor import run_policy_monitor
 from .visa_reminder import run_visa_balance_reminder
 
 
+DATA_SCOPE_NOTE = "数据口径：花费取自广告账户；注册/放款取自 Adjust，归因来源为 {attribution_source}"
+
+
 def money(value: float | Decimal) -> str:
     amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return f"${amount:,}"
@@ -353,6 +356,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
         )
     )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
+    lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
@@ -427,6 +431,7 @@ def hourly_report(dry_run: bool = False) -> None:
         )
     )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
+    lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
 
