@@ -19,6 +19,8 @@ class AdjustKpiMetrics:
     installs: float = 0.0
     registers: float = 0.0
     loans: float = 0.0
+    applies: float = 0.0
+    approvals: float = 0.0
 
 
 class AdjustKpiReporter:
@@ -41,10 +43,7 @@ class AdjustKpiReporter:
             if not channel:
                 continue
             total = metrics.setdefault(channel, AdjustKpiMetrics())
-            row_metrics = self._metrics_from_row(row)
-            total.installs += row_metrics.installs
-            total.registers += row_metrics.registers
-            total.loans += row_metrics.loans
+            _merge_metrics(total, self._metrics_from_row(row))
         return metrics
 
     def daily_campaign_metrics(self, day: date) -> list[tuple[str, str, AdjustKpiMetrics]]:
@@ -61,11 +60,7 @@ class AdjustKpiReporter:
             metrics.append((
                 channel,
                 campaign,
-                AdjustKpiMetrics(
-                    installs=_float(row.get("installs")),
-                    registers=_float(row.get(self.register_metric_key)),
-                    loans=_float(row.get(self.loan_metric_key)),
-                ),
+                self._metrics_from_row(row),
             ))
         return metrics
 
@@ -81,9 +76,7 @@ class AdjustKpiReporter:
         normalized_channels = {_normalize(value) for value in channels}
         for channel, metrics in rows.items():
             if _normalize(channel) in normalized_channels:
-                total.installs += metrics.installs
-                total.registers += metrics.registers
-                total.loans += metrics.loans
+                _merge_metrics(total, metrics)
         return total
 
     def channel_totals_until_hour(self, day: date, hour: int, channels: tuple[str, ...]) -> AdjustKpiMetrics:
@@ -96,9 +89,7 @@ class AdjustKpiReporter:
             if _normalize(channel) not in normalized_channels:
                 continue
             metrics = self._metrics_from_row(row)
-            total.installs += metrics.installs
-            total.registers += metrics.registers
-            total.loans += metrics.loans
+            _merge_metrics(total, metrics)
         return total
 
     def channel_totals_by_day(self, start: date, end: date, channels: tuple[str, ...]) -> dict[date, AdjustKpiMetrics]:
@@ -116,9 +107,7 @@ class AdjustKpiReporter:
                 continue
             row_metrics = self._metrics_from_row(row)
             total = totals.setdefault(day, AdjustKpiMetrics())
-            total.installs += row_metrics.installs
-            total.registers += row_metrics.registers
-            total.loans += row_metrics.loans
+            _merge_metrics(total, row_metrics)
         return totals
 
     def facebook_account_totals(self, day: date) -> dict[str, AdjustKpiMetrics]:
@@ -134,9 +123,7 @@ class AdjustKpiReporter:
             if not account_name:
                 continue
             total = totals.setdefault(account_name, AdjustKpiMetrics())
-            total.installs += metrics.installs
-            total.registers += metrics.registers
-            total.loans += metrics.loans
+            _merge_metrics(total, metrics)
         return totals
 
     def facebook_account_totals_by_day(self, start: date, end: date) -> dict[date, dict[str, AdjustKpiMetrics]]:
@@ -162,9 +149,7 @@ class AdjustKpiReporter:
             })
             row_metrics = self._metrics_from_row(row)
             total = day_totals.setdefault(account_name, AdjustKpiMetrics())
-            total.installs += row_metrics.installs
-            total.registers += row_metrics.registers
-            total.loans += row_metrics.loans
+            _merge_metrics(total, row_metrics)
         return totals_by_day
 
     def facebook_account_totals_until_hour(self, day: date, hour: int) -> dict[str, AdjustKpiMetrics]:
@@ -186,9 +171,7 @@ class AdjustKpiReporter:
                 continue
             metrics = self._metrics_from_row(row)
             total = totals.setdefault(account_name, AdjustKpiMetrics())
-            total.installs += metrics.installs
-            total.registers += metrics.registers
-            total.loans += metrics.loans
+            _merge_metrics(total, metrics)
         return totals
 
     @property
@@ -198,6 +181,14 @@ class AdjustKpiReporter:
     @property
     def loan_metric_key(self) -> str:
         return self._event_metric_key(self.settings.adjust_loan_event_token)
+
+    @property
+    def apply_metric_key(self) -> str:
+        return self._event_metric_key(self.settings.adjust_apply_metric)
+
+    @property
+    def approval_metric_key(self) -> str:
+        return self._event_metric_key(self.settings.adjust_approval_metric)
 
     def _match_facebook_account(self, campaign: str) -> str:
         normalized_campaign = _normalize(campaign)
@@ -210,7 +201,13 @@ class AdjustKpiReporter:
         if not self.enabled:
             raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
         _validate_header_value("ADJUST_USER_TOKEN", self.settings.adjust_user_token)
-        metrics = ",".join(("installs", self.register_metric_key, self.loan_metric_key))
+        metrics = ",".join((
+            "installs",
+            self.register_metric_key,
+            self.loan_metric_key,
+            self.apply_metric_key,
+            self.approval_metric_key,
+        ))
         params = {
             "app_token__in": self.settings.adjust_app_token,
             "date_period": f"{start.isoformat()}:{end.isoformat()}",
@@ -245,6 +242,8 @@ class AdjustKpiReporter:
             installs=_float(row.get("installs")),
             registers=_float(row.get(self.register_metric_key)),
             loans=_float(row.get(self.loan_metric_key)),
+            applies=_float(row.get(self.apply_metric_key)),
+            approvals=_float(row.get(self.approval_metric_key)),
         )
 
     def _event_metric_key(self, event_token: str) -> str:
@@ -341,7 +340,17 @@ def _max_metrics(left: AdjustKpiMetrics, right: AdjustKpiMetrics) -> AdjustKpiMe
         installs=max(left.installs, right.installs),
         registers=max(left.registers, right.registers),
         loans=max(left.loans, right.loans),
+        applies=max(left.applies, right.applies),
+        approvals=max(left.approvals, right.approvals),
     )
+
+
+def _merge_metrics(target: AdjustKpiMetrics, source: AdjustKpiMetrics) -> None:
+    target.installs += source.installs
+    target.registers += source.registers
+    target.loans += source.loans
+    target.applies += source.applies
+    target.approvals += source.approvals
 
 
 def _event_matches(row: dict, needle: str) -> bool:

@@ -17,6 +17,8 @@ class FacebookMetrics:
     spend_inr: Decimal = Decimal("0")
     registers: float = 0.0
     purchases: float = 0.0
+    applies: float = 0.0
+    approvals: float = 0.0
 
     @property
     def cost_per_register_inr(self) -> Decimal:

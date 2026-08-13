@@ -79,6 +79,8 @@ class Settings:
     adjust_app_token: str
     adjust_register_event_token: str
     adjust_loan_event_token: str
+    adjust_apply_metric: str
+    adjust_approval_metric: str
     adjust_grouping: str
     adjust_utc_offset: str
     adjust_attribution_source: str
@@ -124,6 +126,8 @@ def load_settings() -> Settings:
         adjust_app_token=env("ADJUST_APP_TOKEN", "y23vaaza5vcw"),
         adjust_register_event_token=env("ADJUST_REGISTER_EVENT_TOKEN", "elfwqi"),
         adjust_loan_event_token=env("ADJUST_LOAN_EVENT_TOKEN", "yogqjh"),
+        adjust_apply_metric=env("ADJUST_APPLY_METRIC", "apply_for_loan"),
+        adjust_approval_metric=env("ADJUST_APPROVAL_METRIC", "first_ordre_approval"),
         adjust_grouping=env("ADJUST_GROUPING", "partner_name"),
         adjust_utc_offset=env("ADJUST_UTC_OFFSET", "+05:30"),
         adjust_attribution_source=env("ADJUST_ATTRIBUTION_SOURCE", "first"),

@@ -67,6 +67,12 @@ def signed_pct(current: float, previous: float) -> str:
     return f"({pct_change(current, previous)})"
 
 
+def ratio_pct(numerator: float, denominator: float) -> str:
+    if denominator <= 0:
+        return "0.0%"
+    return f"{numerator / denominator:.1%}"
+
+
 def window_label(max_hour: int) -> str:
     if max_hour < 0:
         return "暂无完整小时"
@@ -254,7 +260,7 @@ def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: Faceb
     return [
         title,
         f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -268,7 +274,7 @@ def _fb_hourly_account_block(title: str, current: FacebookMetrics, previous: Fac
     return [
         f"{title}：",
         f"💰 花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜📝 注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜📈 CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
-        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
+        f"💵 购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜💳 CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -441,6 +447,8 @@ def _apply_facebook_report_adjust(reports: list[FacebookAccountReport], account_
         metrics = account_metrics.get(report.name)
         report.metrics.registers = metrics.registers if metrics else 0.0
         report.metrics.purchases = metrics.loans if metrics else 0.0
+        report.metrics.applies = metrics.applies if metrics else 0.0
+        report.metrics.approvals = metrics.approvals if metrics else 0.0
 
 
 def _facebook_total_with_adjust(
@@ -450,6 +458,8 @@ def _facebook_total_with_adjust(
     total = total_reports(reports)
     total.registers = adjust_total.registers
     total.purchases = adjust_total.loans
+    total.applies = adjust_total.applies
+    total.approvals = adjust_total.approvals
     return total
 
 
@@ -513,7 +523,12 @@ def _facebook_estimates(
 
 
 def _metrics_from_adjust(metrics: AdjustKpiMetrics) -> FacebookMetrics:
-    return FacebookMetrics(registers=metrics.registers, purchases=metrics.loans)
+    return FacebookMetrics(
+        registers=metrics.registers,
+        purchases=metrics.loans,
+        applies=metrics.applies,
+        approvals=metrics.approvals,
+    )
 
 
 def _require_google_ads_config(settings) -> None:
