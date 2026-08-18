@@ -99,12 +99,13 @@ def google_daily_lines(
     previous_loan_cpa: Decimal,
 ) -> list[str]:
     return [
-        f"🔍【Google】花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))} "
+        "🔍【Google】",
+        f"花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜"
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜"
-        f"CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))} "
+        f"CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
         f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜"
-        f"CPS：{money(actual_loan_cpa)} {signed_pct(float(actual_loan_cpa), float(previous_loan_cpa))} "
-        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"CPS：{money(actual_loan_cpa)} {signed_pct(float(actual_loan_cpa), float(previous_loan_cpa))}｜"
+        f"通过率：{ratio_pct(current.approvals, current.applies)}",
     ]
 
 
@@ -145,6 +146,7 @@ def fb_daily_lines(
     current_estimates = current_estimates or {}
     previous_estimates = previous_estimates or {}
     lines = [
+        "",
         *_fb_daily_block(
             "🎭【Facebook】",
             current_total,
@@ -153,6 +155,7 @@ def fb_daily_lines(
             current_estimates.get("total"),
             previous_estimates.get("total"),
         ),
+        "",
     ]
     for report in current_reports:
         previous = previous_by_name.get(report.name, FacebookAccountReport(report.name, report.account_id, FacebookMetrics()))
@@ -164,6 +167,7 @@ def fb_daily_lines(
                 rate,
             )
         )
+        lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
         lines.append(f"其他账户/归因：购物 {number(current_other_loans)} {signed_pct(current_other_loans, previous_other_loans)}")
     return lines
@@ -183,29 +187,32 @@ def _fb_daily_block(
     previous_cpa_usd = convert_inr_decimal(previous.cost_per_register_inr, rate)
     current_cpp_usd = convert_inr_decimal(current.cost_per_purchase_inr, rate)
     previous_cpp_usd = convert_inr_decimal(previous.cost_per_purchase_inr, rate)
-    label = title if title.startswith("🎭") else f"{title}："
-    base = (
-        f"{label}花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))} "
+    label = title if title.startswith("🎭") else title
+    lines = [
+        label,
+        f"花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}｜"
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜"
-        f"CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))} "
-    )
+        f"CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
+    ]
     if current_estimate and previous_estimate:
         current_estimated_cpp = cpa(current_spend_usd, current_estimate.estimated_loans)
         previous_estimated_cpp = cpa(previous_spend_usd, previous_estimate.estimated_loans)
-        return [
-            base +
+        lines.append(
             f"已回传购物：{number(current.purchases)}｜"
             f"预估购物：{number(current_estimate.estimated_loans)} {signed_pct(current_estimate.estimated_loans, previous_estimate.estimated_loans)}｜"
-            f"实际CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜"
-            f"预估CPS：{money(current_estimated_cpp)} {signed_pct(float(current_estimated_cpp), float(previous_estimated_cpp))} "
-            f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}"
-        ]
-    return [
-        base +
+            f"实际CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}"
+        )
+        lines.append(
+            f"预估CPS：{money(current_estimated_cpp)} {signed_pct(float(current_estimated_cpp), float(previous_estimated_cpp))}｜"
+            f"通过率：{ratio_pct(current.approvals, current.applies)}"
+        )
+        return lines
+    lines.append(
         f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜"
-        f"CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))} "
-        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}"
-    ]
+        f"CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜"
+        f"通过率：{ratio_pct(current.approvals, current.applies)}"
+    )
+    return lines
 
 
 def fb_hourly_lines(
@@ -321,6 +328,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 日报 {target_day}"
     lines = [
         f"📣 {settings.report_brand} 日报 推送日期：{today}  统计日期：{target_day}（昨日）",
+        "",
     ]
     lines.extend(
         google_daily_lines(
@@ -334,6 +342,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             previous_loan_cpa,
         )
     )
+    lines.append("")
     lines.extend(
         fb_daily_lines(
             fb_current,
@@ -347,6 +356,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             previous_estimates=fb_previous_estimates,
         )
     )
+    lines.append("")
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)
