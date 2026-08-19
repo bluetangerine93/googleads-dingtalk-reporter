@@ -281,14 +281,14 @@ class AdjustKpiReporter:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(request, timeout=60) as response:
+                with urllib.request.urlopen(request, timeout=120) as response:
                     return response.read().decode("utf-8")
             except urllib.error.HTTPError as error:
                 body = error.read().decode("utf-8", errors="replace")
                 if error.code not in {429, 500, 502, 503, 504}:
                     raise RuntimeError(f"{label} error {error.code}: {body}") from error
                 last_error = RuntimeError(f"{label} error {error.code}: {body}")
-            except urllib.error.URLError as error:
+            except (TimeoutError, urllib.error.URLError) as error:
                 last_error = error
             if attempt < 2:
                 time.sleep(2 * (attempt + 1))
