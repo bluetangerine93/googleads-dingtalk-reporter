@@ -73,6 +73,12 @@ def ratio_pct(numerator: float, denominator: float) -> str:
     return f"{numerator / denominator:.1%}"
 
 
+def ratio_change(current_numerator: float, current_denominator: float, previous_numerator: float, previous_denominator: float) -> str:
+    current_ratio = 0.0 if current_denominator <= 0 else current_numerator / current_denominator
+    previous_ratio = 0.0 if previous_denominator <= 0 else previous_numerator / previous_denominator
+    return signed_pct(current_ratio, previous_ratio)
+
+
 def window_label(max_hour: int) -> str:
     if max_hour < 0:
         return "暂无完整小时"
@@ -105,7 +111,7 @@ def google_daily_lines(
         f"CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
         f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜"
         f"CPS：{money(actual_loan_cpa)} {signed_pct(float(actual_loan_cpa), float(previous_loan_cpa))}｜"
-        f"通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
     ]
 
 
@@ -123,7 +129,7 @@ def google_hourly_lines(
         f"🔍【Google】花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}",
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
         f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}",
-        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
     ]
 
 
@@ -204,13 +210,13 @@ def _fb_daily_block(
         )
         lines.append(
             f"预估CPS：{money(current_estimated_cpp)} {signed_pct(float(current_estimated_cpp), float(previous_estimated_cpp))}｜"
-            f"通过率：{ratio_pct(current.approvals, current.applies)}"
+            f"通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}"
         )
         return lines
     lines.append(
         f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜"
         f"CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}｜"
-        f"通过率：{ratio_pct(current.approvals, current.applies)}"
+        f"通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}"
     )
     return lines
 
@@ -250,7 +256,7 @@ def _fb_hourly_total_block(title: str, current: FacebookMetrics, previous: Faceb
         f"{title}花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
         f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
-        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
     ]
 
 
@@ -265,7 +271,7 @@ def _fb_hourly_account_block(title: str, current: FacebookMetrics, previous: Fac
         f"{title}：花费：{money(current_spend_usd)} {signed_pct(float(current_spend_usd), float(previous_spend_usd))}",
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa_usd)} {signed_pct(float(current_cpa_usd), float(previous_cpa_usd))}",
         f"购物：{number(current.purchases)} {signed_pct(current.purchases, previous.purchases)}｜CPS：{money(current_cpp_usd)} {signed_pct(float(current_cpp_usd), float(previous_cpp_usd))}",
-        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)}",
+        f"✅ 通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
     ]
 
 
