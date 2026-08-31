@@ -83,7 +83,7 @@ Report times:
 
 - Daily: `10:00 Asia/Shanghai`.
 - Hourly: `12:00`, `14:00`, `16:00`, `18:00`, `20:00`, `22:00`, `00:00 Asia/Shanghai`, equal to `09:30`, `11:30`, `13:30`, `15:30`, `17:30`, `19:30`, `21:30 Asia/Kolkata`.
-- Policy monitor: every 30 minutes if configured in cron-job.org.
+- Policy monitor: every 30 minutes if configured in cron-job.org. It checks Google Ads policy issues and Facebook ad/ad set review issues, then sends new or changed issues to the policy DingTalk robot.
 
 You can also run it manually from the Actions tab with `workflow_dispatch`.
 

@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 from .config import Settings
+from .policy_types import PolicyIssue
 
 
 @dataclass
@@ -78,6 +79,13 @@ class FacebookAdsReporter:
             for name, account_id in self.settings.fb_daily_accounts
         ]
 
+    def policy_issues(self) -> list[PolicyIssue]:
+        issues: list[PolicyIssue] = []
+        for name, account_id in self.settings.fb_daily_accounts:
+            issues.extend(self._ad_policy_issues(name, account_id))
+            issues.extend(self._adset_policy_issues(name, account_id))
+        return issues
+
     def _account_balance(self, name: str, account_id: str) -> FacebookAccountBalance:
         normalized_account_id = account_id if account_id.startswith("act_") else f"act_{account_id}"
         params = {
@@ -133,6 +141,75 @@ class FacebookAdsReporter:
             url = payload.get("paging", {}).get("next", "")
         return rows
 
+    def _ad_policy_issues(self, name: str, account_id: str) -> list[PolicyIssue]:
+        rows = self._objects(
+            account_id,
+            "ads",
+            fields="id,name,effective_status,configured_status,status,ad_review_feedback,issues_info,campaign{name},adset{name}",
+            extra_params={"effective_status": json.dumps(["DISAPPROVED", "WITH_ISSUES"])},
+        )
+        issues: list[PolicyIssue] = []
+        for row in rows:
+            reasons = _policy_reasons(row)
+            issues.append(
+                PolicyIssue(
+                    customer_id=_format_account_id(account_id),
+                    customer_name=name,
+                    issue_type="Facebook广告",
+                    approval_status=str(row.get("effective_status") or "UNKNOWN"),
+                    review_status=str(row.get("status") or row.get("configured_status") or "UNKNOWN"),
+                    campaign_name=(row.get("campaign") or {}).get("name", ""),
+                    ad_group_name=(row.get("adset") or {}).get("name", ""),
+                    item_name=row.get("name") or row.get("id", ""),
+                    item_id=str(row.get("id", "")),
+                    policy_topics=tuple(reasons) or ("未返回具体审核原因",),
+                )
+            )
+        return issues
+
+    def _adset_policy_issues(self, name: str, account_id: str) -> list[PolicyIssue]:
+        rows = self._objects(
+            account_id,
+            "adsets",
+            fields="id,name,effective_status,configured_status,status,issues_info,campaign{name}",
+            extra_params={"effective_status": json.dumps(["WITH_ISSUES"])},
+        )
+        issues: list[PolicyIssue] = []
+        for row in rows:
+            reasons = _policy_reasons(row)
+            issues.append(
+                PolicyIssue(
+                    customer_id=_format_account_id(account_id),
+                    customer_name=name,
+                    issue_type="Facebook广告组",
+                    approval_status=str(row.get("effective_status") or "UNKNOWN"),
+                    review_status=str(row.get("status") or row.get("configured_status") or "UNKNOWN"),
+                    campaign_name=(row.get("campaign") or {}).get("name", ""),
+                    ad_group_name=row.get("name") or row.get("id", ""),
+                    item_name=row.get("name") or row.get("id", ""),
+                    item_id=str(row.get("id", "")),
+                    policy_topics=tuple(reasons) or ("未返回具体审核原因",),
+                )
+            )
+        return issues
+
+    def _objects(self, account_id: str, edge: str, fields: str, extra_params: dict[str, str] | None = None) -> list[dict]:
+        normalized_account_id = account_id if account_id.startswith("act_") else f"act_{account_id}"
+        params = {
+            "access_token": self.settings.fb_access_token,
+            "fields": fields,
+            "limit": "500",
+        }
+        if extra_params:
+            params.update(extra_params)
+        url = f"https://graph.facebook.com/{self.settings.fb_api_version}/{normalized_account_id}/{edge}?{urllib.parse.urlencode(params)}"
+        rows: list[dict] = []
+        while url:
+            payload = _open_json_request(urllib.request.Request(url, headers={"Accept": "application/json"}))
+            rows.extend(payload.get("data", []))
+            url = payload.get("paging", {}).get("next", "")
+        return rows
+
 
 def total_reports(reports: list[FacebookAccountReport]) -> FacebookMetrics:
     total = FacebookMetrics()
@@ -178,3 +255,49 @@ def _row_hour(row: dict) -> int:
         return int(str(value).split(":", 1)[0])
     except (TypeError, ValueError):
         return 999
+
+
+def _format_account_id(account_id: str) -> str:
+    return account_id.replace("act_", "")
+
+
+def _policy_reasons(row: dict) -> list[str]:
+    reasons: list[str] = []
+    _collect_policy_text(row.get("ad_review_feedback"), reasons)
+    _collect_policy_text(row.get("issues_info"), reasons)
+    return _dedupe(reasons)
+
+
+def _collect_policy_text(value, reasons: list[str]) -> None:
+    if value is None:
+        return
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            reasons.append(text)
+        return
+    if isinstance(value, dict):
+        preferred_keys = ("error_summary", "error_message", "message", "summary", "title", "description", "policy", "policy_name")
+        for key in preferred_keys:
+            if key in value:
+                _collect_policy_text(value[key], reasons)
+        if any(key in value for key in preferred_keys):
+            return
+        for key, item in value.items():
+            if key in {"blame_field_specs", "debug_info", "error_code", "level", "object_type", "severity"}:
+                continue
+            _collect_policy_text(item, reasons)
+        return
+    if isinstance(value, list):
+        for item in value:
+            _collect_policy_text(item, reasons)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result

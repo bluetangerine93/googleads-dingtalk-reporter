@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from .config import ROOT, Settings, load_settings, require_config
 from .dingtalk import send_markdown_to
+from .facebook_ads import FacebookAdsReporter
 from .google_ads import GoogleAdsReporter
 from .policy_types import PolicyIssue
 
@@ -40,6 +41,13 @@ def _format_issue(issue: PolicyIssue) -> str:
     )
 
 
+def _policy_issues(settings: Settings) -> list[PolicyIssue]:
+    issues = GoogleAdsReporter(settings).policy_issues()
+    if settings.fb_access_token and settings.fb_daily_accounts:
+        issues.extend(FacebookAdsReporter(settings).policy_issues())
+    return issues
+
+
 def run_policy_monitor(dry_run: bool = False) -> None:
     settings = load_settings()
     require_config({
@@ -50,10 +58,9 @@ def run_policy_monitor(dry_run: bool = False) -> None:
         "GOOGLE_ADS_CUSTOMER_IDS": ",".join(settings.customer_ids),
         "POLICY_DINGTALK_WEBHOOK": settings.policy_dingtalk_webhook,
     })
-    reporter = GoogleAdsReporter(settings)
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)
-    issues = reporter.policy_issues()
+    issues = _policy_issues(settings)
     current_fingerprints = {issue.fingerprint for issue in issues}
     state = _read_state()
     previous_fingerprints = set(state.get("fingerprints", []))
@@ -66,13 +73,13 @@ def run_policy_monitor(dry_run: bool = False) -> None:
             print("No new or changed policy issues.")
         return
 
-    title = f"Google Ads拒审提醒 | {now:%Y-%m-%d %H:%M}"
-    header = f"Google Ads拒审提醒 | {now:%Y-%m-%d %H:%M}\n\n发现 {len(changed_issues)} 条新增/变化的问题"
+    title = f"广告拒审提醒 | {now:%Y-%m-%d %H:%M}"
+    header = f"广告拒审提醒 | {now:%Y-%m-%d %H:%M}\n\n发现 {len(changed_issues)} 条新增/变化的问题"
     blocks = []
     for issue in changed_issues[:10]:
         blocks.append(_format_issue(issue))
     if len(changed_issues) > 10:
-        blocks.append(f"还有 {len(changed_issues) - 10} 条未展示，请到 Google Ads 后台查看。")
+        blocks.append(f"还有 {len(changed_issues) - 10} 条未展示，请到对应广告后台查看。")
     text = header + "\n\n" + "\n\n".join(blocks)
     send_markdown_to(
         settings.policy_dingtalk_webhook,
