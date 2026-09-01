@@ -18,6 +18,13 @@ class Metrics:
     approvals: float = 0.0
 
 
+@dataclass
+class GoogleAccountReport:
+    name: str
+    customer_id: str
+    metrics: Metrics
+
+
 class GoogleAdsReporter:
     def __init__(self, settings: Settings):
         config = {
@@ -36,30 +43,45 @@ class GoogleAdsReporter:
         service = self.client.get_service("GoogleAdsService")
         return service.search(customer_id=customer_id, query=query)
 
-    def _sum_cost(self, start: date, end: date, max_hour: int | None = None) -> float:
+    def _sum_cost_for_customer(self, customer_id: str, start: date, end: date, max_hour: int | None = None) -> float:
         total_micros = 0
-        for customer_id in self.settings.customer_ids:
-            if max_hour is None:
-                query = f"""
-                    SELECT metrics.cost_micros
-                    FROM customer
-                    WHERE segments.date BETWEEN '{start}' AND '{end}'
-                """
-            else:
-                query = f"""
-                    SELECT metrics.cost_micros, segments.hour
-                    FROM customer
-                    WHERE segments.date = '{start}'
-                      AND segments.hour <= {max_hour}
-                """
-            for row in self._search(customer_id, query):
-                total_micros += row.metrics.cost_micros
+        if max_hour is None:
+            query = f"""
+                SELECT metrics.cost_micros
+                FROM customer
+                WHERE segments.date BETWEEN '{start}' AND '{end}'
+            """
+        else:
+            query = f"""
+                SELECT metrics.cost_micros, segments.hour
+                FROM customer
+                WHERE segments.date = '{start}'
+                  AND segments.hour <= {max_hour}
+            """
+        for row in self._search(customer_id, query):
+            total_micros += row.metrics.cost_micros
         return total_micros / 1_000_000
+
+    def _sum_cost(self, start: date, end: date, max_hour: int | None = None) -> float:
+        return sum(
+            self._sum_cost_for_customer(customer_id, start, end, max_hour=max_hour)
+            for customer_id in self.settings.customer_ids
+        )
 
     def metrics_for_day(self, day: date) -> Metrics:
         return Metrics(
             cost_inr=self._sum_cost(day, day),
         )
+
+    def reports_for_day(self, day: date) -> list[GoogleAccountReport]:
+        return [
+            GoogleAccountReport(
+                name=_format_customer_id(customer_id),
+                customer_id=customer_id,
+                metrics=Metrics(cost_inr=self._sum_cost_for_customer(customer_id, day, day)),
+            )
+            for customer_id in self.settings.customer_ids
+        ]
 
     def metrics_for_period(self, start: date, end: date) -> Metrics:
         return Metrics(
@@ -70,6 +92,16 @@ class GoogleAdsReporter:
         return Metrics(
             cost_inr=self._sum_cost(day, day, max_hour=hour),
         )
+
+    def reports_until_hour(self, day: date, hour: int) -> list[GoogleAccountReport]:
+        return [
+            GoogleAccountReport(
+                name=_format_customer_id(customer_id),
+                customer_id=customer_id,
+                metrics=Metrics(cost_inr=self._sum_cost_for_customer(customer_id, day, day, max_hour=hour)),
+            )
+            for customer_id in self.settings.customer_ids
+        ]
 
     def policy_issues(self) -> list[PolicyIssue]:
         issues: list[PolicyIssue] = []

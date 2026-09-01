@@ -77,7 +77,7 @@ DINGTALK_SECRET
 INR_USD_RATE (optional manual override; leave empty to auto-fetch one monthly rate)
 ```
 
-For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left empty and `GOOGLE_ADS_CUSTOMER_IDS` should be `5309400878`.
+For the current direct-account setup, `GOOGLE_ADS_LOGIN_CUSTOMER_ID` can be left empty and `GOOGLE_ADS_CUSTOMER_IDS` should be `5309400878,5359376966`.
 
 Report times:
 
@@ -97,6 +97,7 @@ ADJUST_GROUPING=partner_name
 ADJUST_UTC_OFFSET=+05:30
 ADJUST_ATTRIBUTION_SOURCE=first
 ADJUST_GOOGLE_CHANNELS=Google Ads
+ADJUST_GOOGLE_ACCOUNT_CAMPAIGNS=5359376966:PocketMitra_text_only_UAC2.5_approval_20260813|pocketmitra_text only_2.5_loan_260630
 ADJUST_FACEBOOK_CHANNELS=Facebook
 ADJUST_FACEBOOK_ACCOUNT_PATTERNS=PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04
 ```

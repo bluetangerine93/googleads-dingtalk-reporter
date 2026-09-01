@@ -126,6 +126,20 @@ class AdjustKpiReporter:
             _merge_metrics(total, metrics)
         return totals
 
+    def google_account_totals(self, day: date, customer_ids: tuple[str, ...]) -> dict[str, AdjustKpiMetrics]:
+        totals = {customer_id: AdjustKpiMetrics() for customer_id in customer_ids}
+        if not customer_ids:
+            return totals
+        default_customer_id = customer_ids[0]
+        channel_set = {_normalize(value) for value in self.settings.adjust_google_channels}
+        for channel, campaign, metrics in self.daily_campaign_metrics(day):
+            if _normalize(channel) not in channel_set:
+                continue
+            customer_id = self._match_google_customer(campaign) or default_customer_id
+            total = totals.setdefault(customer_id, AdjustKpiMetrics())
+            _merge_metrics(total, metrics)
+        return totals
+
     def facebook_account_totals_by_day(self, start: date, end: date) -> dict[date, dict[str, AdjustKpiMetrics]]:
         totals_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
         channel_set = {_normalize(value) for value in self.settings.adjust_facebook_channels}
@@ -174,6 +188,26 @@ class AdjustKpiReporter:
             _merge_metrics(total, metrics)
         return totals
 
+    def google_account_totals_until_hour(self, day: date, hour: int, customer_ids: tuple[str, ...]) -> dict[str, AdjustKpiMetrics]:
+        totals = {customer_id: AdjustKpiMetrics() for customer_id in customer_ids}
+        if not customer_ids:
+            return totals
+        default_customer_id = customer_ids[0]
+        channel_set = {_normalize(value) for value in self.settings.adjust_google_channels}
+        grouping = f"hour,{self.settings.adjust_grouping},campaign"
+        for row in self._hourly_rows(day, grouping, hour):
+            channel = _text(row, self.settings.adjust_grouping)
+            if not channel:
+                channel = _first_text(row, ("channel", "channels", "network", "networks"))
+            if _normalize(channel) not in channel_set:
+                continue
+            campaign = _first_text(row, ("campaign", "campaigns", "campaign_name", "campaign_names"))
+            customer_id = self._match_google_customer(campaign) or default_customer_id
+            metrics = self._metrics_from_row(row)
+            total = totals.setdefault(customer_id, AdjustKpiMetrics())
+            _merge_metrics(total, metrics)
+        return totals
+
     @property
     def register_metric_key(self) -> str:
         return self._event_metric_key(self.settings.adjust_register_event_token)
@@ -195,6 +229,15 @@ class AdjustKpiReporter:
         for name, pattern in self.settings.adjust_facebook_account_patterns:
             if normalized_campaign.startswith(_normalize(pattern)):
                 return name
+        return ""
+
+    def _match_google_customer(self, campaign: str) -> str:
+        normalized_campaign = _normalize(campaign)
+        for customer_id, campaign_names in self.settings.adjust_google_account_campaigns:
+            for campaign_name in campaign_names:
+                normalized_campaign_name = _normalize(campaign_name)
+                if normalized_campaign == normalized_campaign_name or normalized_campaign.startswith(normalized_campaign_name):
+                    return customer_id
         return ""
 
     def _request(self, start: date, end: date, grouping: str):

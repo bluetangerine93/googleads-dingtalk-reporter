@@ -54,6 +54,18 @@ def parse_named_patterns(raw_value: str) -> tuple[tuple[str, str], ...]:
     return tuple(patterns)
 
 
+def parse_named_pattern_lists(raw_value: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    groups: list[tuple[str, tuple[str, ...]]] = []
+    for item in raw_value.split(","):
+        if not item.strip() or ":" not in item:
+            continue
+        name, patterns = item.split(":", 1)
+        pattern_list = tuple(pattern.strip() for pattern in patterns.split("|") if pattern.strip())
+        if pattern_list:
+            groups.append((name.strip().replace("-", ""), pattern_list))
+    return tuple(groups)
+
+
 @dataclass(frozen=True)
 class Settings:
     developer_token: str
@@ -85,6 +97,7 @@ class Settings:
     adjust_utc_offset: str
     adjust_attribution_source: str
     adjust_google_channels: tuple[str, ...]
+    adjust_google_account_campaigns: tuple[tuple[str, tuple[str, ...]], ...]
     adjust_facebook_channels: tuple[str, ...]
     adjust_facebook_account_patterns: tuple[tuple[str, str], ...]
     fb_access_token: str
@@ -132,6 +145,12 @@ def load_settings() -> Settings:
         adjust_utc_offset=env("ADJUST_UTC_OFFSET", "+05:30"),
         adjust_attribution_source=env("ADJUST_ATTRIBUTION_SOURCE", "first"),
         adjust_google_channels=parse_csv(env("ADJUST_GOOGLE_CHANNELS", "Google Ads")),
+        adjust_google_account_campaigns=parse_named_pattern_lists(
+            env(
+                "ADJUST_GOOGLE_ACCOUNT_CAMPAIGNS",
+                "5359376966:PocketMitra_text_only_UAC2.5_approval_20260813|pocketmitra_text only_2.5_loan_260630",
+            )
+        ),
         adjust_facebook_channels=parse_csv(env("ADJUST_FACEBOOK_CHANNELS", "Facebook")),
         adjust_facebook_account_patterns=parse_named_patterns(
             env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04")

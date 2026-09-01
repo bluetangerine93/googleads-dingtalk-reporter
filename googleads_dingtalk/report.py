@@ -12,7 +12,7 @@ from .dingtalk import send_markdown
 from .estimator import LoanEstimate, estimate_delayed_loans, save_daily_snapshot
 from .facebook_ads import FacebookAccountReport, FacebookMetrics, FacebookAdsReporter, total_reports
 from .fx import get_monthly_rate
-from .google_ads import GoogleAdsReporter, Metrics
+from .google_ads import GoogleAccountReport, GoogleAdsReporter, Metrics
 from .policy_monitor import run_policy_monitor
 from .visa_reminder import run_visa_balance_reminder
 
@@ -130,6 +130,40 @@ def google_hourly_lines(
         f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜CPA：{money(current_cpa)} {signed_pct(float(current_cpa), float(previous_cpa))}",
         f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}",
         f"✅ 通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
+    ]
+
+
+def google_account_lines(
+    current_reports: list[GoogleAccountReport],
+    previous_reports: list[GoogleAccountReport],
+    rate: Decimal,
+) -> list[str]:
+    if len(current_reports) <= 1:
+        return []
+    previous_by_id = {report.customer_id: report for report in previous_reports}
+    lines = [""]
+    for report in current_reports:
+        previous = previous_by_id.get(report.customer_id, GoogleAccountReport(report.name, report.customer_id, Metrics()))
+        lines.extend(_google_account_block(f"Google {report.name}", report.metrics, previous.metrics, rate))
+        lines.append("")
+    return lines
+
+
+def _google_account_block(title: str, current: Metrics, previous: Metrics, rate: Decimal) -> list[str]:
+    current_cost = convert_cost(current.cost_inr, rate)
+    previous_cost = convert_cost(previous.cost_inr, rate)
+    current_reg_cpa = cpa(current_cost, current.registers)
+    previous_reg_cpa = cpa(previous_cost, previous.registers)
+    current_loan_cpa = cpa(current_cost, current.loans)
+    previous_loan_cpa = cpa(previous_cost, previous.loans)
+    return [
+        f"{title}：",
+        f"花费：{money(current_cost)} {signed_pct(float(current_cost), float(previous_cost))}｜"
+        f"注册：{number(current.registers)} {signed_pct(current.registers, previous.registers)}｜"
+        f"CPA：{money(current_reg_cpa)} {signed_pct(float(current_reg_cpa), float(previous_reg_cpa))}",
+        f"放款：{number(current.loans)} {signed_pct(current.loans, previous.loans)}｜"
+        f"CPS：{money(current_loan_cpa)} {signed_pct(float(current_loan_cpa), float(previous_loan_cpa))}｜"
+        f"通过率：{ratio_pct(current.approvals, current.applies)} {ratio_change(current.approvals, current.applies, previous.approvals, previous.applies)}",
     ]
 
 
@@ -292,18 +326,14 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
     adjust_reporter = AdjustKpiReporter(settings)
-    current = reporter.metrics_for_day(target_day)
-    previous = reporter.metrics_for_day(previous_day)
-    current_adjust = adjust_reporter.channel_totals(target_day, settings.adjust_google_channels)
-    previous_adjust = adjust_reporter.channel_totals(previous_day, settings.adjust_google_channels)
-    current.registers = current_adjust.registers
-    current.loans = current_adjust.loans
-    current.applies = current_adjust.applies
-    current.approvals = current_adjust.approvals
-    previous.registers = previous_adjust.registers
-    previous.loans = previous_adjust.loans
-    previous.applies = previous_adjust.applies
-    previous.approvals = previous_adjust.approvals
+    google_current_reports = reporter.reports_for_day(target_day)
+    google_previous_reports = reporter.reports_for_day(previous_day)
+    google_current_adjust_accounts = adjust_reporter.google_account_totals(target_day, settings.customer_ids)
+    google_previous_adjust_accounts = adjust_reporter.google_account_totals(previous_day, settings.customer_ids)
+    _apply_google_report_adjust(google_current_reports, google_current_adjust_accounts)
+    _apply_google_report_adjust(google_previous_reports, google_previous_adjust_accounts)
+    current = _total_google_reports(google_current_reports)
+    previous = _total_google_reports(google_previous_reports)
     save_daily_snapshot(target_day, today, current)
 
     current_cost = convert_cost(current.cost_inr, rate)
@@ -348,6 +378,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             previous_loan_cpa,
         )
     )
+    lines.extend(google_account_lines(google_current_reports, google_previous_reports, rate))
     lines.append("")
     lines.extend(
         fb_daily_lines(
@@ -386,18 +417,14 @@ def hourly_report(dry_run: bool = False) -> None:
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
     adjust_reporter = AdjustKpiReporter(settings)
-    current = reporter.metrics_until_hour(today, hour)
-    previous = reporter.metrics_until_hour(yesterday, hour)
-    current_adjust = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_google_channels)
-    previous_adjust = adjust_reporter.channel_totals_until_hour(yesterday, hour, settings.adjust_google_channels)
-    current.registers = current_adjust.registers
-    current.loans = current_adjust.loans
-    current.applies = current_adjust.applies
-    current.approvals = current_adjust.approvals
-    previous.registers = previous_adjust.registers
-    previous.loans = previous_adjust.loans
-    previous.applies = previous_adjust.applies
-    previous.approvals = previous_adjust.approvals
+    google_current_reports = reporter.reports_until_hour(today, hour)
+    google_previous_reports = reporter.reports_until_hour(yesterday, hour)
+    google_current_adjust_accounts = adjust_reporter.google_account_totals_until_hour(today, hour, settings.customer_ids)
+    google_previous_adjust_accounts = adjust_reporter.google_account_totals_until_hour(yesterday, hour, settings.customer_ids)
+    _apply_google_report_adjust(google_current_reports, google_current_adjust_accounts)
+    _apply_google_report_adjust(google_previous_reports, google_previous_adjust_accounts)
+    current = _total_google_reports(google_current_reports)
+    previous = _total_google_reports(google_previous_reports)
     current_cost = convert_cost(current.cost_inr, rate)
     previous_cost = convert_cost(previous.cost_inr, rate)
     current_cpa = cpa(current_cost, current.registers)
@@ -430,6 +457,7 @@ def hourly_report(dry_run: bool = False) -> None:
             previous_loan_cpa,
         )
     )
+    lines.extend(google_account_lines(google_current_reports, google_previous_reports, rate))
     lines.extend(
         fb_hourly_lines(
             fb_current,
@@ -454,6 +482,26 @@ def _apply_facebook_report_adjust(reports: list[FacebookAccountReport], account_
         report.metrics.purchases = metrics.loans if metrics else 0.0
         report.metrics.applies = metrics.applies if metrics else 0.0
         report.metrics.approvals = metrics.approvals if metrics else 0.0
+
+
+def _apply_google_report_adjust(reports: list[GoogleAccountReport], account_metrics: dict[str, AdjustKpiMetrics]) -> None:
+    for report in reports:
+        metrics = account_metrics.get(report.customer_id)
+        report.metrics.registers = metrics.registers if metrics else 0.0
+        report.metrics.loans = metrics.loans if metrics else 0.0
+        report.metrics.applies = metrics.applies if metrics else 0.0
+        report.metrics.approvals = metrics.approvals if metrics else 0.0
+
+
+def _total_google_reports(reports: list[GoogleAccountReport]) -> Metrics:
+    total = Metrics()
+    for report in reports:
+        total.cost_inr += report.metrics.cost_inr
+        total.registers += report.metrics.registers
+        total.loans += report.metrics.loans
+        total.applies += report.metrics.applies
+        total.approvals += report.metrics.approvals
+    return total
 
 
 def _facebook_total_with_adjust(
