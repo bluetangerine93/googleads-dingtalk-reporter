@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
@@ -417,12 +418,20 @@ def hourly_report(dry_run: bool = False) -> None:
     reporter = GoogleAdsReporter(settings)
     fb_reporter = FacebookAdsReporter(settings)
     adjust_reporter = AdjustKpiReporter(settings)
-    google_current_reports = reporter.reports_until_hour(today, hour)
-    google_previous_reports = reporter.reports_until_hour(yesterday, hour)
-    google_current_adjust_accounts = adjust_reporter.google_account_totals_until_hour(today, hour, settings.customer_ids)
-    google_previous_adjust_accounts = adjust_reporter.google_account_totals_until_hour(yesterday, hour, settings.customer_ids)
-    _apply_google_report_adjust(google_current_reports, google_current_adjust_accounts)
-    _apply_google_report_adjust(google_previous_reports, google_previous_adjust_accounts)
+    adjust_reporter.warm_metric_keys()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        current_adjust_future = executor.submit(adjust_reporter.hourly_media_metrics, today, hour, settings.customer_ids)
+        previous_adjust_future = executor.submit(adjust_reporter.hourly_media_metrics, yesterday, hour, settings.customer_ids)
+        fb_current_future = executor.submit(fb_reporter.hourly_reports, today, hour) if fb_reporter.enabled else None
+        fb_previous_future = executor.submit(fb_reporter.hourly_reports, yesterday, hour) if fb_reporter.enabled else None
+        google_current_reports = reporter.reports_until_hour(today, hour)
+        google_previous_reports = reporter.reports_until_hour(yesterday, hour)
+        current_adjust = current_adjust_future.result()
+        previous_adjust = previous_adjust_future.result()
+        fb_current = fb_current_future.result() if fb_current_future else []
+        fb_previous = fb_previous_future.result() if fb_previous_future else []
+    _apply_google_report_adjust(google_current_reports, current_adjust.google_accounts)
+    _apply_google_report_adjust(google_previous_reports, previous_adjust.google_accounts)
     current = _total_google_reports(google_current_reports)
     previous = _total_google_reports(google_previous_reports)
     current_cost = convert_cost(current.cost_inr, rate)
@@ -431,14 +440,8 @@ def hourly_report(dry_run: bool = False) -> None:
     previous_cpa = cpa(previous_cost, previous.registers)
     current_loan_cpa = cpa(current_cost, current.loans)
     previous_loan_cpa = cpa(previous_cost, previous.loans)
-    fb_current = fb_reporter.hourly_reports(today, hour) if fb_reporter.enabled else []
-    fb_previous = fb_reporter.hourly_reports(yesterday, hour) if fb_reporter.enabled else []
-    fb_current_adjust_total = adjust_reporter.channel_totals_until_hour(today, hour, settings.adjust_facebook_channels)
-    fb_previous_adjust_total = adjust_reporter.channel_totals_until_hour(yesterday, hour, settings.adjust_facebook_channels)
-    fb_current_adjust_accounts = adjust_reporter.facebook_account_totals_until_hour(today, hour)
-    fb_previous_adjust_accounts = adjust_reporter.facebook_account_totals_until_hour(yesterday, hour)
-    _apply_facebook_report_adjust(fb_current, fb_current_adjust_accounts)
-    _apply_facebook_report_adjust(fb_previous, fb_previous_adjust_accounts)
+    _apply_facebook_report_adjust(fb_current, current_adjust.facebook_accounts)
+    _apply_facebook_report_adjust(fb_previous, previous_adjust.facebook_accounts)
 
     title = f"{settings.dingtalk_keyword} {settings.report_brand} 实时数据 {now:%H:%M}"
     lines = [
@@ -463,10 +466,10 @@ def hourly_report(dry_run: bool = False) -> None:
             fb_current,
             fb_previous,
             rate,
-            current_total=_facebook_total_with_adjust(fb_current, fb_current_adjust_total),
-            previous_total=_facebook_total_with_adjust(fb_previous, fb_previous_adjust_total),
-            current_other_loans=_other_facebook_loans(fb_current_adjust_total, fb_current_adjust_accounts),
-            previous_other_loans=_other_facebook_loans(fb_previous_adjust_total, fb_previous_adjust_accounts),
+            current_total=_facebook_total_with_adjust(fb_current, current_adjust.facebook_total),
+            previous_total=_facebook_total_with_adjust(fb_previous, previous_adjust.facebook_total),
+            current_other_loans=_other_facebook_loans(current_adjust.facebook_total, current_adjust.facebook_accounts),
+            previous_other_loans=_other_facebook_loans(previous_adjust.facebook_total, previous_adjust.facebook_accounts),
         )
     )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")

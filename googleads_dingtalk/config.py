@@ -96,6 +96,7 @@ class Settings:
     adjust_grouping: str
     adjust_utc_offset: str
     adjust_attribution_source: str
+    adjust_request_timeout: int
     adjust_google_channels: tuple[str, ...]
     adjust_google_account_campaigns: tuple[tuple[str, tuple[str, ...]], ...]
     adjust_facebook_channels: tuple[str, ...]
@@ -144,6 +145,7 @@ def load_settings() -> Settings:
         adjust_grouping=env("ADJUST_GROUPING", "partner_name"),
         adjust_utc_offset=env("ADJUST_UTC_OFFSET", "+05:30"),
         adjust_attribution_source=env("ADJUST_ATTRIBUTION_SOURCE", "first"),
+        adjust_request_timeout=env_int("ADJUST_REQUEST_TIMEOUT", 45),
         adjust_google_channels=parse_csv(env("ADJUST_GOOGLE_CHANNELS", "Google Ads")),
         adjust_google_account_campaigns=parse_named_pattern_lists(
             env(

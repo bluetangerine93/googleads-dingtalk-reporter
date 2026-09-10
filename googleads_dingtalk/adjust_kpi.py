@@ -23,10 +23,19 @@ class AdjustKpiMetrics:
     approvals: float = 0.0
 
 
+@dataclass
+class AdjustHourlyMediaMetrics:
+    google_accounts: dict[str, AdjustKpiMetrics]
+    facebook_total: AdjustKpiMetrics
+    facebook_accounts: dict[str, AdjustKpiMetrics]
+
+
 class AdjustKpiReporter:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._event_metric_cache: dict[str, str] = {}
+        self._events_cache: list[dict] | None = None
+        self._hourly_rows_cache: dict[tuple[date, str, int], list[dict]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -82,7 +91,7 @@ class AdjustKpiReporter:
     def channel_totals_until_hour(self, day: date, hour: int, channels: tuple[str, ...]) -> AdjustKpiMetrics:
         total = AdjustKpiMetrics()
         normalized_channels = {_normalize(value) for value in channels}
-        for row in self._hourly_rows(day, f"hour,{self.settings.adjust_grouping}", hour):
+        for row in self._hourly_rows(day, f"hour,{self.settings.adjust_grouping},campaign", hour):
             channel = _text(row, self.settings.adjust_grouping)
             if not channel:
                 channel = _first_text(row, ("channel", "channels", "network", "networks"))
@@ -208,6 +217,41 @@ class AdjustKpiReporter:
             _merge_metrics(total, metrics)
         return totals
 
+    def hourly_media_metrics(self, day: date, hour: int, customer_ids: tuple[str, ...]) -> AdjustHourlyMediaMetrics:
+        google_accounts = {customer_id: AdjustKpiMetrics() for customer_id in customer_ids}
+        facebook_accounts = {
+            name: AdjustKpiMetrics()
+            for name, _pattern in self.settings.adjust_facebook_account_patterns
+        }
+        facebook_total = AdjustKpiMetrics()
+        default_customer_id = customer_ids[0] if customer_ids else ""
+        google_channels = {_normalize(value) for value in self.settings.adjust_google_channels}
+        facebook_channels = {_normalize(value) for value in self.settings.adjust_facebook_channels}
+
+        grouping = f"hour,{self.settings.adjust_grouping},campaign"
+        for row in self._hourly_rows(day, grouping, hour):
+            channel = _text(row, self.settings.adjust_grouping)
+            if not channel:
+                channel = _first_text(row, ("channel", "channels", "network", "networks"))
+            normalized_channel = _normalize(channel)
+            campaign = _first_text(row, ("campaign", "campaigns", "campaign_name", "campaign_names"))
+            metrics = self._metrics_from_row(row)
+
+            if normalized_channel in google_channels and default_customer_id:
+                customer_id = self._match_google_customer(campaign) or default_customer_id
+                _merge_metrics(google_accounts.setdefault(customer_id, AdjustKpiMetrics()), metrics)
+            elif normalized_channel in facebook_channels:
+                _merge_metrics(facebook_total, metrics)
+                account_name = self._match_facebook_account(campaign)
+                if account_name:
+                    _merge_metrics(facebook_accounts.setdefault(account_name, AdjustKpiMetrics()), metrics)
+
+        return AdjustHourlyMediaMetrics(
+            google_accounts=google_accounts,
+            facebook_total=facebook_total,
+            facebook_accounts=facebook_accounts,
+        )
+
     @property
     def register_metric_key(self) -> str:
         return self._event_metric_key(self.settings.adjust_register_event_token)
@@ -223,6 +267,14 @@ class AdjustKpiReporter:
     @property
     def approval_metric_key(self) -> str:
         return self._event_metric_key(self.settings.adjust_approval_metric)
+
+    def warm_metric_keys(self) -> None:
+        _ = (
+            self.register_metric_key,
+            self.loan_metric_key,
+            self.apply_metric_key,
+            self.approval_metric_key,
+        )
 
     def _match_facebook_account(self, campaign: str) -> str:
         normalized_campaign = _normalize(campaign)
@@ -273,12 +325,17 @@ class AdjustKpiReporter:
         return json.loads(body)
 
     def _hourly_rows(self, day: date, grouping: str, hour: int) -> list[dict]:
+        cache_key = (day, grouping, hour)
+        if cache_key in self._hourly_rows_cache:
+            return self._hourly_rows_cache[cache_key]
         payload = self._request(day, day, grouping)
-        return [
+        rows = [
             row
             for row in _find_rows(payload)
             if _row_hour_in_window(row, day, hour)
         ]
+        self._hourly_rows_cache[cache_key] = rows
+        return rows
 
     def _metrics_from_row(self, row: dict) -> AdjustKpiMetrics:
         return AdjustKpiMetrics(
@@ -298,6 +355,17 @@ class AdjustKpiReporter:
         return metric_key
 
     def _event_id(self, event_token: str) -> str:
+        needle = event_token.strip().casefold()
+        for row in self._events():
+            if _event_matches(row, needle):
+                event_id = _first_text(row, ("id", "key", "slug", "metric", "name"))
+                if event_id:
+                    return event_id
+        raise RuntimeError(f"Adjust event token not found in Report Service events list: {event_token}")
+
+    def _events(self) -> list[dict]:
+        if self._events_cache is not None:
+            return self._events_cache
         if not self.enabled:
             raise ValueError("ADJUST_USER_TOKEN and ADJUST_APP_TOKEN are required.")
         _validate_header_value("ADJUST_USER_TOKEN", self.settings.adjust_user_token)
@@ -311,20 +379,14 @@ class AdjustKpiReporter:
             },
         )
         body = self._open_json_request(request, "Adjust Report Service events API")
-
-        needle = event_token.strip().casefold()
-        for row in _find_rows(json.loads(body)):
-            if _event_matches(row, needle):
-                event_id = _first_text(row, ("id", "key", "slug", "metric", "name"))
-                if event_id:
-                    return event_id
-        raise RuntimeError(f"Adjust event token not found in Report Service events list: {event_token}")
+        self._events_cache = _find_rows(json.loads(body))
+        return self._events_cache
 
     def _open_json_request(self, request: urllib.request.Request, label: str) -> str:
         last_error: Exception | None = None
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(request, timeout=120) as response:
+                with urllib.request.urlopen(request, timeout=self.settings.adjust_request_timeout) as response:
                     return response.read().decode("utf-8")
             except urllib.error.HTTPError as error:
                 body = error.read().decode("utf-8", errors="replace")
