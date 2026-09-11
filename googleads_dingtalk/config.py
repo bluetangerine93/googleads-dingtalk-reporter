@@ -134,7 +134,7 @@ def load_settings() -> Settings:
         target_currency=env("TARGET_CURRENCY", "USD"),
         inr_usd_rate=env("INR_USD_RATE"),
         report_brand=env("REPORT_BRAND", "PocketMitra"),
-        loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 14),
+        loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 7),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
         adjust_user_token=env("ADJUST_USER_TOKEN", env("ADJUST_API_TOKEN")),
         adjust_app_token=env("ADJUST_APP_TOKEN", "y23vaaza5vcw"),
@@ -155,7 +155,7 @@ def load_settings() -> Settings:
         ),
         adjust_facebook_channels=parse_csv(env("ADJUST_FACEBOOK_CHANNELS", "Facebook")),
         adjust_facebook_account_patterns=parse_named_patterns(
-            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04")
+            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-02:pocketmitra_02,PocketMitra-03:pocketmitra_03,PocketMitra-04:pocketmitra_04")
         ),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),

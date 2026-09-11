@@ -99,7 +99,7 @@ ADJUST_ATTRIBUTION_SOURCE=first
 ADJUST_GOOGLE_CHANNELS=Google Ads
 ADJUST_GOOGLE_ACCOUNT_CAMPAIGNS=5359376966:PocketMitra_text_only_UAC2.5_approval_20260813|pocketmitra_text only_2.5_loan_260630
 ADJUST_FACEBOOK_CHANNELS=Facebook
-ADJUST_FACEBOOK_ACCOUNT_PATTERNS=PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04
+ADJUST_FACEBOOK_ACCOUNT_PATTERNS=PocketMitra-02:pocketmitra_02,PocketMitra-03:pocketmitra_03,PocketMitra-04:pocketmitra_04
 ```
 
 ## External cron trigger

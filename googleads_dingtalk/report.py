@@ -329,8 +329,26 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     adjust_reporter = AdjustKpiReporter(settings)
     google_current_reports = reporter.reports_for_day(target_day)
     google_previous_reports = reporter.reports_for_day(previous_day)
-    google_current_adjust_accounts = adjust_reporter.google_account_totals(target_day, settings.customer_ids)
-    google_previous_adjust_accounts = adjust_reporter.google_account_totals(previous_day, settings.customer_ids)
+    adjust_reporter.warm_metric_keys()
+    fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
+    fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
+    fb_history_start = target_day - timedelta(days=max(settings.loan_estimate_lookback_days, 1) - 1)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        google_current_adjust_future = executor.submit(
+            adjust_reporter.google_account_totals, target_day, settings.customer_ids
+        )
+        google_previous_adjust_future = executor.submit(
+            adjust_reporter.google_account_totals, previous_day, settings.customer_ids
+        )
+        fb_history_future = executor.submit(
+            adjust_reporter.facebook_history_by_day,
+            fb_history_start,
+            target_day,
+            settings.adjust_facebook_channels,
+        )
+        google_current_adjust_accounts = google_current_adjust_future.result()
+        google_previous_adjust_accounts = google_previous_adjust_future.result()
+        fb_adjust_history, fb_account_history = fb_history_future.result()
     _apply_google_report_adjust(google_current_reports, google_current_adjust_accounts)
     _apply_google_report_adjust(google_previous_reports, google_previous_adjust_accounts)
     current = _total_google_reports(google_current_reports)
@@ -343,11 +361,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     previous_reg_cpa = cpa(previous_cost, previous.registers)
     actual_loan_cpa = cpa(current_cost, current.loans)
     previous_loan_cpa = cpa(previous_cost, previous.loans)
-    fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
-    fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
-    fb_history_start = target_day - timedelta(days=max(settings.loan_estimate_lookback_days, 1) - 1)
-    fb_adjust_history = adjust_reporter.channel_totals_by_day(fb_history_start, target_day, settings.adjust_facebook_channels)
-    fb_account_history = adjust_reporter.facebook_account_totals_by_day(fb_history_start, target_day)
     fb_current_adjust_total = fb_adjust_history.get(target_day, AdjustKpiMetrics())
     fb_previous_adjust_total = fb_adjust_history.get(previous_day, AdjustKpiMetrics())
     fb_current_adjust_accounts = _facebook_account_metrics_for_day(fb_account_history, target_day, settings)

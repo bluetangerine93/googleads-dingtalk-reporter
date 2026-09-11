@@ -39,7 +39,7 @@ jobs:
       ACCOUNT_CURRENCY: INR
       TARGET_CURRENCY: USD
       REPORT_BRAND: PocketMitra
-      LOAN_ESTIMATE_LOOKBACK_DAYS: 14
+      LOAN_ESTIMATE_LOOKBACK_DAYS: 7
       LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS: 7
       ADJUST_USER_TOKEN: ${{ secrets.ADJUST_API_TOKEN }}
       ADJUST_APP_TOKEN: y23vaaza5vcw
@@ -53,10 +53,10 @@ jobs:
       ADJUST_GOOGLE_CHANNELS: Google Ads
       ADJUST_GOOGLE_ACCOUNT_CAMPAIGNS: "5359376966:PocketMitra_text_only_UAC2.5_approval_20260813|pocketmitra_text only_2.5_loan_260630"
       ADJUST_FACEBOOK_CHANNELS: Facebook
-      ADJUST_FACEBOOK_ACCOUNT_PATTERNS: PocketMitra-02:pocketmitra_02,PocketMitra-04:pocketmitra_04
+      ADJUST_FACEBOOK_ACCOUNT_PATTERNS: PocketMitra-02:pocketmitra_02,PocketMitra-03:pocketmitra_03,PocketMitra-04:pocketmitra_04
       FB_ACCESS_TOKEN: ${{ secrets.FB_TOKEN }}
       FB_API_VERSION: v19.0
-      FB_DAILY_ACCOUNTS: PocketMitra-02:act_699832393105441,PocketMitra-04:act_838379439062631
+      FB_DAILY_ACCOUNTS: PocketMitra-02:act_699832393105441,PocketMitra-03:act_791708183465814,PocketMitra-04:act_838379439062631
 
     steps:
       - name: Check out repository

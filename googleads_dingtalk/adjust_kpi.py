@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -149,9 +148,16 @@ class AdjustKpiReporter:
             _merge_metrics(total, metrics)
         return totals
 
-    def facebook_account_totals_by_day(self, start: date, end: date) -> dict[date, dict[str, AdjustKpiMetrics]]:
-        totals_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
-        channel_set = {_normalize(value) for value in self.settings.adjust_facebook_channels}
+    def facebook_history_by_day(
+        self,
+        start: date,
+        end: date,
+        channels: tuple[str, ...],
+    ) -> tuple[dict[date, AdjustKpiMetrics], dict[date, dict[str, AdjustKpiMetrics]]]:
+        """Fetch Facebook daily campaign rows once for totals and account splits."""
+        channel_set = {_normalize(value) for value in channels}
+        totals_by_day: dict[date, AdjustKpiMetrics] = {}
+        accounts_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
         payload = self._request(start, end, f"day,{self.settings.adjust_grouping},campaign")
         for row in _find_rows(payload):
             day = _row_day(row)
@@ -162,18 +168,17 @@ class AdjustKpiReporter:
                 channel = _first_text(row, ("channel", "channels", "network", "networks"))
             if _normalize(channel) not in channel_set:
                 continue
+            row_metrics = self._metrics_from_row(row)
+            _merge_metrics(totals_by_day.setdefault(day, AdjustKpiMetrics()), row_metrics)
             campaign = _first_text(row, ("campaign", "campaigns", "campaign_name", "campaign_names"))
             account_name = self._match_facebook_account(campaign)
-            if not account_name:
-                continue
-            day_totals = totals_by_day.setdefault(day, {
-                name: AdjustKpiMetrics()
-                for name, _pattern in self.settings.adjust_facebook_account_patterns
-            })
-            row_metrics = self._metrics_from_row(row)
-            total = day_totals.setdefault(account_name, AdjustKpiMetrics())
-            _merge_metrics(total, row_metrics)
-        return totals_by_day
+            if account_name:
+                day_totals = accounts_by_day.setdefault(day, {
+                    name: AdjustKpiMetrics()
+                    for name, _pattern in self.settings.adjust_facebook_account_patterns
+                })
+                _merge_metrics(day_totals.setdefault(account_name, AdjustKpiMetrics()), row_metrics)
+        return totals_by_day, accounts_by_day
 
     def facebook_account_totals_until_hour(self, day: date, hour: int) -> dict[str, AdjustKpiMetrics]:
         totals = {
@@ -383,21 +388,20 @@ class AdjustKpiReporter:
         return self._events_cache
 
     def _open_json_request(self, request: urllib.request.Request, label: str) -> str:
-        last_error: Exception | None = None
-        for attempt in range(3):
-            try:
-                with urllib.request.urlopen(request, timeout=self.settings.adjust_request_timeout) as response:
-                    return response.read().decode("utf-8")
-            except urllib.error.HTTPError as error:
-                body = error.read().decode("utf-8", errors="replace")
-                if error.code not in {429, 500, 502, 503, 504}:
-                    raise RuntimeError(f"{label} error {error.code}: {body}") from error
-                last_error = RuntimeError(f"{label} error {error.code}: {body}")
-            except (TimeoutError, urllib.error.URLError) as error:
-                last_error = error
-            if attempt < 2:
-                time.sleep(2 * (attempt + 1))
-        raise RuntimeError(f"{label} request failed after retries: {last_error}") from last_error
+        # The workflow retries the complete report command. Retrying here as well
+        # can keep a hung response reader alive for several timeout windows and
+        # prevent the report process from exiting cleanly.
+        try:
+            with urllib.request.urlopen(request, timeout=self.settings.adjust_request_timeout) as response:
+                return response.read().decode("utf-8")
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            if error.code not in {429, 500, 502, 503, 504}:
+                raise RuntimeError(f"{label} error {error.code}: {body}") from error
+            last_error: Exception = RuntimeError(f"{label} error {error.code}: {body}")
+        except (TimeoutError, urllib.error.URLError) as error:
+            last_error = error
+        raise RuntimeError(f"{label} request failed without in-process retry: {last_error}") from last_error
 
 
 def _find_rows(payload) -> list[dict]:
