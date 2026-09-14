@@ -55,19 +55,28 @@ def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
     if mode not in {"all", "balance", "status"}:
         raise ValueError(f"Unsupported Facebook balance monitor mode: {mode}")
     settings = load_settings()
+    monitor_accounts = settings.fb_status_accounts if mode == "status" else settings.fb_daily_accounts
     require_config({
         "FB_ACCESS_TOKEN": settings.fb_access_token,
-        "FB_DAILY_ACCOUNTS": ",".join(account_id for _name, account_id in settings.fb_daily_accounts),
+        "FB_MONITOR_ACCOUNTS": ",".join(account_id for _name, account_id in monitor_accounts),
         "LARK_BALANCE_WEBHOOK": settings.lark_balance_webhook,
     })
     reporter = FacebookAdsReporter(settings)
-    balances = reporter.account_balances()
+    balances = reporter.account_balances(accounts=monitor_accounts)
     threshold = Decimal(str(settings.fb_balance_threshold_inr))
-    alerts = [
-        alert
-        for balance in balances
-        if (alert := _balance_alert(balance, threshold, mode)) is not None
-    ]
+    status_account_ids = {
+        account_id.removeprefix("act_")
+        for _name, account_id in settings.fb_status_accounts
+    }
+    alerts = []
+    for balance in balances:
+        normalized_id = balance.account_id.removeprefix("act_")
+        alert_mode = mode
+        if mode == "all" and normalized_id not in status_account_ids:
+            alert_mode = "balance"
+        alert = _balance_alert(balance, threshold, alert_mode)
+        if alert is not None:
+            alerts.append(alert)
     if not alerts:
         if dry_run:
             print(f"No Facebook account alerts for mode: {mode}.")

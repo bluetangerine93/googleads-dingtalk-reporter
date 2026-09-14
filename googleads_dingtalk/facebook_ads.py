@@ -73,10 +73,14 @@ class FacebookAdsReporter:
             for name, account_id in self.settings.fb_daily_accounts
         ]
 
-    def account_balances(self) -> list[FacebookAccountBalance]:
+    def account_balances(
+        self,
+        accounts: tuple[tuple[str, str], ...] | None = None,
+    ) -> list[FacebookAccountBalance]:
+        monitor_accounts = accounts if accounts is not None else self.settings.fb_daily_accounts
         return [
             self._account_balance(name, account_id)
-            for name, account_id in self.settings.fb_daily_accounts
+            for name, account_id in monitor_accounts
         ]
 
     def policy_issues(self) -> list[PolicyIssue]:
