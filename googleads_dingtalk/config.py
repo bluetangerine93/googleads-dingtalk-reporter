@@ -156,7 +156,7 @@ def load_settings() -> Settings:
         ),
         adjust_facebook_channels=parse_csv(env("ADJUST_FACEBOOK_CHANNELS", "Facebook")),
         adjust_facebook_account_patterns=parse_named_patterns(
-            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmitra_01_new")
+            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmitra_new_01")
         ),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),
