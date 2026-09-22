@@ -90,6 +90,7 @@ class Settings:
     account_currency: str
     target_currency: str
     inr_usd_rate: str
+    inr_usd_monthly_rates: str
     report_brand: str
     loan_estimate_lookback_days: int
     loan_estimate_exclude_recent_days: int
@@ -142,6 +143,7 @@ def load_settings() -> Settings:
         account_currency=env("ACCOUNT_CURRENCY", "INR"),
         target_currency=env("TARGET_CURRENCY", "USD"),
         inr_usd_rate=env("INR_USD_RATE"),
+        inr_usd_monthly_rates=env("INR_USD_MONTHLY_RATES"),
         report_brand=env("REPORT_BRAND", "PocketMitra"),
         loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 7),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),

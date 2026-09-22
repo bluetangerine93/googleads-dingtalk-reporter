@@ -23,10 +23,32 @@ def _write_cache(cache: dict) -> None:
     FX_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _monthly_rate_override(settings: Settings, month_key: str) -> Decimal | None:
+    for item in settings.inr_usd_monthly_rates.split(","):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        if key.strip() == month_key:
+            return Decimal(value.strip())
+    return None
+
+
 def get_monthly_rate(settings: Settings, today: date) -> Decimal:
     if settings.account_currency != "INR" or settings.target_currency != "USD":
         raise ValueError("Only INR to USD is configured in this reporter")
     month_key = today.strftime("%Y-%m")
+    monthly_override = _monthly_rate_override(settings, month_key)
+    if monthly_override is not None:
+        rate = monthly_override
+        cache = _read_cache()
+        cache[month_key] = {
+            "from": settings.account_currency,
+            "to": settings.target_currency,
+            "rate": str(rate),
+            "source": "monthly_override",
+        }
+        _write_cache(cache)
+        return rate
     if settings.inr_usd_rate:
         rate = Decimal(settings.inr_usd_rate)
         cache = _read_cache()

@@ -43,6 +43,9 @@ DISABLE_REASON_LABELS = {
     8: "Unused Reseller Account",
     9: "Unused Account",
 }
+PAYMENT_METHOD_LABELS = {
+    "月度结算": "Monthly billing",
+}
 
 
 @dataclass
@@ -163,7 +166,7 @@ def _format_balance_alert_card(
                     f"**Balance currency:** {_md_escape(balance.currency or 'N/A')}",
                     f"**Status:** **{_md_escape(account_status_label(balance.account_status))}**",
                     f"Detail: {_md_escape(account_status_detail(balance) or 'N/A')}",
-                    f"Payment: {_md_escape(balance.funding_source or 'N/A')}",
+                    f"Payment: {_md_escape(payment_method_label(balance.funding_source))}",
                 ]),
             },
         })
@@ -194,6 +197,12 @@ def _short_account_name(name: str) -> str:
 
 def account_status_label(status: int) -> str:
     return ACCOUNT_STATUS_LABELS.get(status, f"Unknown ({status})")
+
+
+def payment_method_label(value: str) -> str:
+    if not value:
+        return "N/A"
+    return PAYMENT_METHOD_LABELS.get(value, value)
 
 
 def account_status_detail(balance: FacebookAccountBalance) -> str:

@@ -412,11 +412,11 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     )
     lines.append("")
     if fb_credit_balance is not None:
-        lines.append(
-            f"FB 03额度：总额度 {inr_money(fb_credit_balance.credit_limit_inr)}｜"
-            f"当前需支付余额 {inr_money(fb_credit_balance.balance_inr)}｜"
-            f"预计额度剩余 {inr_money(fb_credit_balance.available_credit_inr)}"
-        )
+        lines.extend([
+            f"FB 03额度：总额度 {inr_money(fb_credit_balance.credit_limit_inr)}",
+            f"当前需支付余额：{inr_money(fb_credit_balance.balance_inr)}",
+            f"预计额度剩余：{inr_money(fb_credit_balance.available_credit_inr)}",
+        ])
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)

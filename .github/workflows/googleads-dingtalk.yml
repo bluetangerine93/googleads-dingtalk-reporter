@@ -38,6 +38,8 @@ jobs:
       REPORT_TIMEZONE: Asia/Kolkata
       ACCOUNT_CURRENCY: INR
       TARGET_CURRENCY: USD
+      # Monthly INR to USD overrides; future months continue using automatic refresh.
+      INR_USD_MONTHLY_RATES: "2026-09:0.0106277238223074"
       REPORT_BRAND: PocketMitra
       LOAN_ESTIMATE_LOOKBACK_DAYS: 7
       LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS: 7
