@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -28,6 +29,11 @@ def env(name: str, default: str = "") -> str:
 def env_int(name: str, default: int) -> int:
     value = env(name)
     return int(value) if value else default
+
+
+def env_decimal(name: str, default: str) -> Decimal:
+    value = env(name, default)
+    return Decimal(value)
 
 
 def parse_named_accounts(raw_value: str) -> tuple[tuple[str, str], ...]:
@@ -106,6 +112,8 @@ class Settings:
     fb_daily_accounts: tuple[tuple[str, str], ...]
     fb_status_accounts: tuple[tuple[str, str], ...]
     fb_balance_threshold_inr: int
+    fb_credit_limit_inr: Decimal
+    fb_credit_alert_threshold_inr: Decimal
     lark_balance_webhook: str
     lark_balance_keyword: str
 
@@ -165,6 +173,8 @@ def load_settings() -> Settings:
             env("FB_STATUS_ACCOUNTS", "PocketMitra-03:act_791708183465814")
         ),
         fb_balance_threshold_inr=env_int("FB_BALANCE_THRESHOLD_INR", 20000),
+        fb_credit_limit_inr=env_decimal("FB_CREDIT_LIMIT_INR", "949929.84"),
+        fb_credit_alert_threshold_inr=env_decimal("FB_CREDIT_ALERT_THRESHOLD_INR", "280000"),
         lark_balance_webhook=env("LARK_BALANCE_WEBHOOK"),
         lark_balance_keyword=env("LARK_BALANCE_KEYWORD", "notification"),
     )

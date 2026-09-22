@@ -51,6 +51,11 @@ class FacebookAccountBalance:
     account_status: int
     disable_reason: int
     funding_source: str
+    credit_limit_inr: Decimal = Decimal("0")
+
+    @property
+    def available_credit_inr(self) -> Decimal:
+        return max(self.credit_limit_inr - self.balance_inr, Decimal("0"))
 
 
 class FacebookAdsReporter:
@@ -107,6 +112,11 @@ class FacebookAdsReporter:
             account_status=int(payload.get("account_status") or 0),
             disable_reason=int(payload.get("disable_reason") or 0),
             funding_source=(payload.get("funding_source_details") or {}).get("display_string", ""),
+            credit_limit_inr=(
+                self.settings.fb_credit_limit_inr
+                if any(account_id == account_id_value for _name, account_id_value in self.settings.fb_status_accounts)
+                else Decimal("0")
+            ),
         )
 
     def _metrics_for_day(self, account_id: str, day: date) -> FacebookMetrics:

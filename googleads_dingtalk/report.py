@@ -332,6 +332,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
     adjust_reporter.warm_metric_keys()
     fb_current = fb_reporter.daily_reports(target_day) if fb_reporter.enabled else []
     fb_previous = fb_reporter.daily_reports(previous_day) if fb_reporter.enabled else []
+    fb_credit_balance = _load_fb_credit_balance(fb_reporter, settings)
     fb_history_start = target_day - timedelta(days=max(settings.loan_estimate_lookback_days, 1) - 1)
     with ThreadPoolExecutor(max_workers=4) as executor:
         google_current_adjust_future = executor.submit(
@@ -410,6 +411,12 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
         )
     )
     lines.append("")
+    if fb_credit_balance is not None:
+        lines.append(
+            f"FB 03额度：总额度 {inr_money(fb_credit_balance.credit_limit_inr)}｜"
+            f"当前需支付余额 {inr_money(fb_credit_balance.balance_inr)}｜"
+            f"预计额度剩余 {inr_money(fb_credit_balance.available_credit_inr)}"
+        )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
     lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)
@@ -493,6 +500,17 @@ def hourly_report(dry_run: bool = False) -> None:
     lines.append(DATA_SCOPE_NOTE.format(attribution_source=settings.adjust_attribution_source))
     text = "\n".join(lines)
     send_markdown(settings, title, text, dry_run=dry_run)
+
+
+def _load_fb_credit_balance(fb_reporter: FacebookAdsReporter, settings):
+    if not fb_reporter.enabled or not settings.fb_status_accounts:
+        return None
+    try:
+        balances = fb_reporter.account_balances(accounts=settings.fb_status_accounts)
+    except Exception as error:
+        print(f"Facebook credit balance unavailable: {type(error).__name__}")
+        return None
+    return balances[0] if balances else None
 
 
 def _facebook_display_reports(

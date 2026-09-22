@@ -64,6 +64,7 @@ def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
     reporter = FacebookAdsReporter(settings)
     balances = reporter.account_balances(accounts=monitor_accounts)
     threshold = Decimal(str(settings.fb_balance_threshold_inr))
+    credit_threshold = settings.fb_credit_alert_threshold_inr
     status_account_ids = {
         account_id.removeprefix("act_")
         for _name, account_id in settings.fb_status_accounts
@@ -74,7 +75,7 @@ def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
         alert_mode = mode
         if mode == "all" and normalized_id not in status_account_ids:
             alert_mode = "balance"
-        alert = _balance_alert(balance, threshold, alert_mode)
+        alert = _balance_alert(balance, threshold, credit_threshold, alert_mode)
         if alert is not None:
             alerts.append(alert)
     if not alerts:
@@ -84,7 +85,7 @@ def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
 
     tz = ZoneInfo(settings.report_timezone)
     now = datetime.now(tz)
-    card = _format_balance_alert_card(now, alerts, threshold, mode)
+    card = _format_balance_alert_card(now, alerts, threshold, credit_threshold, mode)
     send_interactive_card(
         settings.lark_balance_webhook,
         settings.lark_balance_keyword,
@@ -93,10 +94,22 @@ def run_fb_balance_monitor(dry_run: bool = False, mode: str = "all") -> None:
     )
 
 
-def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal, mode: str) -> BalanceAlert | None:
+def _balance_alert(
+    balance: FacebookAccountBalance,
+    threshold: Decimal,
+    credit_threshold: Decimal,
+    mode: str,
+) -> BalanceAlert | None:
     reasons: list[str] = []
     if mode in {"all", "balance"} and balance.currency == "INR" and balance.balance_inr < threshold:
         reasons.append("Balance below threshold")
+    if (
+        mode in {"all", "status"}
+        and balance.currency == "INR"
+        and balance.credit_limit_inr > 0
+        and balance.available_credit_inr <= credit_threshold
+    ):
+        reasons.append("Estimated available credit is below threshold")
     if mode in {"all", "status"} and balance.account_status != ACTIVE_ACCOUNT_STATUS:
         status_text = account_status_label(balance.account_status)
         detail_text = account_status_detail(balance)
@@ -106,7 +119,13 @@ def _balance_alert(balance: FacebookAccountBalance, threshold: Decimal, mode: st
     return BalanceAlert(balance=balance, reasons=tuple(reasons))
 
 
-def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], threshold: Decimal, mode: str) -> dict:
+def _format_balance_alert_card(
+    now: datetime,
+    alerts: list[BalanceAlert],
+    threshold: Decimal,
+    credit_threshold: Decimal,
+    mode: str,
+) -> dict:
     title = {
         "balance": "PM FB Balance Alert",
         "status": "PM FB Account Status Alert",
@@ -117,6 +136,8 @@ def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], thresh
     ]
     if mode in {"all", "balance"}:
         summary_lines.append(f"**Threshold:** INR {threshold:,.2f}")
+    if mode in {"all", "status"}:
+        summary_lines.append(f"**Credit alert threshold:** INR {credit_threshold:,.2f}")
     summary_lines.append(f"**Alerts:** {len(alerts)} account(s)")
     elements = [
         {
@@ -136,7 +157,10 @@ def _format_balance_alert_card(now: datetime, alerts: list[BalanceAlert], thresh
                 "tag": "lark_md",
                 "content": "\n".join([
                     f"**{_md_escape(_short_account_name(balance.name))}** ({_md_escape(balance.account_id)})",
-                    f"**Balance:** **INR {balance.balance_inr:,.2f}**",
+                    f"**Total credit limit:** **INR {balance.credit_limit_inr:,.2f}**",
+                    f"**Payable balance:** **INR {balance.balance_inr:,.2f}**",
+                    f"**Estimated remaining credit:** **INR {balance.available_credit_inr:,.2f}**",
+                    f"**Balance currency:** {_md_escape(balance.currency or 'N/A')}",
                     f"**Status:** **{_md_escape(account_status_label(balance.account_status))}**",
                     f"Detail: {_md_escape(account_status_detail(balance) or 'N/A')}",
                     f"Payment: {_md_escape(balance.funding_source or 'N/A')}",

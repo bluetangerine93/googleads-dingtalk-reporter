@@ -57,6 +57,9 @@ jobs:
       FB_ACCESS_TOKEN: ${{ secrets.FB_TOKEN }}
       FB_API_VERSION: v19.0
       FB_DAILY_ACCOUNTS: PocketMitra-02:act_699832393105441,PocketMitra-03:act_791708183465814,PocketMitra-04:act_838379439062631,JaiFinance-01:act_1026126253805169
+      FB_STATUS_ACCOUNTS: PocketMitra-03:act_791708183465814
+      FB_CREDIT_LIMIT_INR: 949929.84
+      FB_CREDIT_ALERT_THRESHOLD_INR: 280000
 
     steps:
       - name: Check out repository
