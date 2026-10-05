@@ -175,7 +175,7 @@ def load_settings() -> Settings:
             env("FB_STATUS_ACCOUNTS", "PocketMitra-03:act_791708183465814")
         ),
         fb_balance_threshold_inr=env_int("FB_BALANCE_THRESHOLD_INR", 20000),
-        fb_credit_limit_inr=env_decimal("FB_CREDIT_LIMIT_INR", "949929.84"),
+        fb_credit_limit_inr=env_decimal("FB_CREDIT_LIMIT_INR", "3792547.64"),
         fb_credit_alert_threshold_inr=env_decimal("FB_CREDIT_ALERT_THRESHOLD_INR", "280000"),
         lark_balance_webhook=env("LARK_BALANCE_WEBHOOK"),
         lark_balance_keyword=env("LARK_BALANCE_KEYWORD", "notification"),
