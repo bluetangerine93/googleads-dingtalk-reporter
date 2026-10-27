@@ -52,11 +52,19 @@ def parse_csv(raw_value: str) -> tuple[str, ...]:
 
 def parse_named_patterns(raw_value: str) -> tuple[tuple[str, str], ...]:
     patterns: list[tuple[str, str]] = []
+    current_name: str | None = None
+    current_parts: list[str] = []
     for item in raw_value.split(","):
-        if not item.strip() or ":" not in item:
-            continue
-        name, pattern = item.split(":", 1)
-        patterns.append((name.strip(), pattern.strip()))
+        if ":" in item:
+            if current_name is not None:
+                patterns.append((current_name, ",".join(current_parts).strip()))
+            name, pattern = item.split(":", 1)
+            current_name = name.strip()
+            current_parts = [pattern.strip()]
+        elif current_name is not None:
+            current_parts.append(item.strip())
+    if current_name is not None:
+        patterns.append((current_name, ",".join(current_parts).strip()))
     return tuple(patterns)
 
 
@@ -166,7 +174,10 @@ def load_settings() -> Settings:
         ),
         adjust_facebook_channels=parse_csv(env("ADJUST_FACEBOOK_CHANNELS", "Facebook")),
         adjust_facebook_account_patterns=parse_named_patterns(
-            env("ADJUST_FACEBOOK_ACCOUNT_PATTERNS", "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmtra_new_01")
+            env(
+                "ADJUST_FACEBOOK_ACCOUNT_PATTERNS",
+                "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmtra_new_01,PocketMitra-02-Hindibelt:pocketmitra_02_Hindibelt_generic_9thOct,26",
+            )
         ),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),
         fb_api_version=env("FB_API_VERSION", "v19.0"),
