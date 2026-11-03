@@ -155,7 +155,12 @@ def load_settings() -> Settings:
         report_brand=env("REPORT_BRAND", "PocketMitra"),
         loan_estimate_lookback_days=env_int("LOAN_ESTIMATE_LOOKBACK_DAYS", 7),
         loan_estimate_exclude_recent_days=env_int("LOAN_ESTIMATE_EXCLUDE_RECENT_DAYS", 7),
-        adjust_user_token=env("ADJUST_USER_TOKEN", env("ADJUST_API_TOKEN")),
+        # Bearer tokens cannot contain HTTP control characters; strip stray terminal escapes from env values.
+        adjust_user_token="".join(
+            char
+            for char in env("ADJUST_USER_TOKEN", env("ADJUST_API_TOKEN"))
+            if ord(char) >= 32 and ord(char) != 127
+        ),
         adjust_app_token=env("ADJUST_APP_TOKEN", "y23vaaza5vcw"),
         adjust_register_event_token=env("ADJUST_REGISTER_EVENT_TOKEN", "elfwqi"),
         adjust_loan_event_token=env("ADJUST_LOAN_EVENT_TOKEN", "yogqjh"),
@@ -176,7 +181,7 @@ def load_settings() -> Settings:
         adjust_facebook_account_patterns=parse_named_patterns(
             env(
                 "ADJUST_FACEBOOK_ACCOUNT_PATTERNS",
-                "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmtra_new_01,PocketMitra-02-Hindibelt:pocketmitra_02_Hindibelt_generic_9thOct,26",
+                "PocketMitra-03:pocketmitra_03,JaiFinance-01:pocketmitra_new_01,PocketMitra-02-Hindibelt:pocketmitra_02_Hindibelt_generic_9thOct,26",
             )
         ),
         fb_access_token=env("FB_ACCESS_TOKEN", env("FB_TOKEN")),

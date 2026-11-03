@@ -27,6 +27,7 @@ class AdjustHourlyMediaMetrics:
     google_accounts: dict[str, AdjustKpiMetrics]
     facebook_total: AdjustKpiMetrics
     facebook_accounts: dict[str, AdjustKpiMetrics]
+    facebook_campaigns: dict[str, AdjustKpiMetrics]
 
 
 class AdjustKpiReporter:
@@ -56,20 +57,18 @@ class AdjustKpiReporter:
 
     def daily_campaign_metrics(self, day: date) -> list[tuple[str, str, AdjustKpiMetrics]]:
         payload = self._request(day, day, f"{self.settings.adjust_grouping},campaign")
-        rows = _find_rows(payload)
+        return self._campaign_metrics_from_payload(payload)
+
+    def _campaign_metrics_from_payload(self, payload) -> list[tuple[str, str, AdjustKpiMetrics]]:
         metrics: list[tuple[str, str, AdjustKpiMetrics]] = []
-        for row in rows:
+        for row in _find_rows(payload):
             channel = _text(row, self.settings.adjust_grouping)
             if not channel:
                 channel = _first_text(row, ("channel", "channels", "network", "networks"))
             campaign = _first_text(row, ("campaign", "campaigns", "campaign_name", "campaign_names"))
             if not channel or not campaign:
                 continue
-            metrics.append((
-                channel,
-                campaign,
-                self._metrics_from_row(row),
-            ))
+            metrics.append((channel, campaign, self._metrics_from_row(row)))
         return metrics
 
     def channel_totals(self, day: date, channels: tuple[str, ...], attempts: int = 3) -> AdjustKpiMetrics:
@@ -153,11 +152,16 @@ class AdjustKpiReporter:
         start: date,
         end: date,
         channels: tuple[str, ...],
-    ) -> tuple[dict[date, AdjustKpiMetrics], dict[date, dict[str, AdjustKpiMetrics]]]:
-        """Fetch Facebook daily campaign rows once for totals and account splits."""
+    ) -> tuple[
+        dict[date, AdjustKpiMetrics],
+        dict[date, dict[str, AdjustKpiMetrics]],
+        dict[date, dict[str, AdjustKpiMetrics]],
+    ]:
+        """Fetch Facebook daily campaign rows once for totals, account splits and campaign details."""
         channel_set = {_normalize(value) for value in channels}
         totals_by_day: dict[date, AdjustKpiMetrics] = {}
         accounts_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
+        jai_campaigns_by_day: dict[date, dict[str, AdjustKpiMetrics]] = {}
         payload = self._request(start, end, f"day,{self.settings.adjust_grouping},campaign")
         for row in _find_rows(payload):
             day = _row_day(row)
@@ -178,7 +182,10 @@ class AdjustKpiReporter:
                     for name, _pattern in self.settings.adjust_facebook_account_patterns
                 })
                 _merge_metrics(day_totals.setdefault(account_name, AdjustKpiMetrics()), row_metrics)
-        return totals_by_day, accounts_by_day
+                if account_name == "JaiFinance-01":
+                    campaign_totals = jai_campaigns_by_day.setdefault(day, {})
+                    _merge_metrics(campaign_totals.setdefault(campaign, AdjustKpiMetrics()), row_metrics)
+        return totals_by_day, accounts_by_day, jai_campaigns_by_day
 
     def facebook_account_totals_until_hour(self, day: date, hour: int) -> dict[str, AdjustKpiMetrics]:
         totals = {
@@ -228,6 +235,7 @@ class AdjustKpiReporter:
             name: AdjustKpiMetrics()
             for name, _pattern in self.settings.adjust_facebook_account_patterns
         }
+        facebook_campaigns: dict[str, AdjustKpiMetrics] = {}
         facebook_total = AdjustKpiMetrics()
         default_customer_id = customer_ids[0] if customer_ids else ""
         google_channels = {_normalize(value) for value in self.settings.adjust_google_channels}
@@ -250,11 +258,14 @@ class AdjustKpiReporter:
                 account_name = self._match_facebook_account(campaign)
                 if account_name:
                     _merge_metrics(facebook_accounts.setdefault(account_name, AdjustKpiMetrics()), metrics)
+                    if account_name == "JaiFinance-01":
+                        _merge_metrics(facebook_campaigns.setdefault(campaign, AdjustKpiMetrics()), metrics)
 
         return AdjustHourlyMediaMetrics(
             google_accounts=google_accounts,
             facebook_total=facebook_total,
             facebook_accounts=facebook_accounts,
+            facebook_campaigns=facebook_campaigns,
         )
 
     @property
