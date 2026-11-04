@@ -168,17 +168,6 @@ def _google_account_block(title: str, current: Metrics, previous: Metrics, rate:
     ]
 
 
-def _jai_campaign_detail_lines(campaigns: dict[str, AdjustKpiMetrics]) -> list[str]:
-    if not campaigns:
-        return ["JaiFinance-01 campaign明细（Adjust）：暂无匹配campaign数据"]
-    lines = ["JaiFinance-01 campaign明细（Adjust）："]
-    for campaign, metrics in sorted(campaigns.items(), key=lambda item: item[0].casefold()):
-        lines.append(
-            f"{campaign}｜安装 {number(metrics.installs)}｜注册 {number(metrics.registers)}｜"
-            f"申请 {number(metrics.applies)}｜通过 {number(metrics.approvals)}｜放款 {number(metrics.loans)}"
-        )
-    return lines
-
 
 def fb_daily_lines(
     current_reports: list[FacebookAccountReport],
@@ -190,7 +179,6 @@ def fb_daily_lines(
     previous_other_loans: float = 0.0,
     current_estimates: dict[str, LoanEstimate] | None = None,
     previous_estimates: dict[str, LoanEstimate] | None = None,
-    current_jai_campaigns: dict[str, AdjustKpiMetrics] | None = None,
 ) -> list[str]:
     if not current_reports:
         return []
@@ -199,7 +187,6 @@ def fb_daily_lines(
     previous_total = previous_total or total_reports(previous_reports)
     current_estimates = current_estimates or {}
     previous_estimates = previous_estimates or {}
-    current_jai_campaigns = current_jai_campaigns or {}
     lines = [
         "",
         *_fb_daily_block(
@@ -222,8 +209,6 @@ def fb_daily_lines(
                 rate,
             )
         )
-        if report.name == "JaiFinance-01":
-            lines.extend(_jai_campaign_detail_lines(current_jai_campaigns))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
         lines.append(f"其他账户/归因：购物 {number(current_other_loans)} {signed_pct(current_other_loans, previous_other_loans)}")
@@ -280,19 +265,15 @@ def fb_hourly_lines(
     previous_total: FacebookMetrics | None = None,
     current_other_loans: float = 0.0,
     previous_other_loans: float = 0.0,
-    current_jai_campaigns: dict[str, AdjustKpiMetrics] | None = None,
 ) -> list[str]:
     if not current_reports:
         return []
-    current_jai_campaigns = current_jai_campaigns or {}
     current_total = current_total or total_reports(current_reports)
     previous_total = previous_total or total_reports(previous_reports)
     lines = ["", *_fb_hourly_total_block("🎭【Facebook】", current_total, previous_total, rate), ""]
     for report in current_reports:
         previous = next((item for item in previous_reports if item.name == report.name), None)
         lines.extend(_fb_hourly_account_block(report.name, report.metrics, previous.metrics if previous else FacebookMetrics(), rate))
-        if report.name == "JaiFinance-01":
-            lines.extend(_jai_campaign_detail_lines(current_jai_campaigns))
         lines.append("")
     if current_other_loans > 0 or previous_other_loans > 0:
         lines.append(f"其他账户/归因：购物 {number(current_other_loans)}")
@@ -369,7 +350,7 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
         )
         google_current_adjust_accounts = google_current_adjust_future.result()
         google_previous_adjust_accounts = google_previous_adjust_future.result()
-        fb_adjust_history, fb_account_history, fb_campaign_history = fb_history_future.result()
+        fb_adjust_history, fb_account_history = fb_history_future.result()
     _apply_google_report_adjust(google_current_reports, google_current_adjust_accounts)
     _apply_google_report_adjust(google_previous_reports, google_previous_adjust_accounts)
     current = _total_google_reports(google_current_reports)
@@ -428,7 +409,6 @@ def daily_report(dry_run: bool = False, report_date: str | None = None) -> None:
             previous_other_loans=fb_previous_other_loans,
             current_estimates=fb_current_estimates,
             previous_estimates=fb_previous_estimates,
-            current_jai_campaigns=fb_campaign_history.get(target_day, {}),
         )
     )
     lines.append("")
@@ -515,7 +495,6 @@ def hourly_report(dry_run: bool = False) -> None:
             previous_total=_facebook_total_with_adjust(fb_previous, previous_adjust.facebook_total),
             current_other_loans=_other_facebook_loans(current_adjust.facebook_total, current_adjust.facebook_accounts),
             previous_other_loans=_other_facebook_loans(previous_adjust.facebook_total, previous_adjust.facebook_accounts),
-            current_jai_campaigns=current_adjust.facebook_campaigns,
         )
     )
     lines.append(f"汇率：1 USD = {usd_to_inr(rate)} INR")
